@@ -4,7 +4,7 @@ use rusqlite::{params, Connection};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::models::{Notification, Priority};
+use crate::models::{Notification, Priority, TagFilter};
 
 pub fn get_db_path() -> Result<PathBuf> {
     let proj_dirs = ProjectDirs::from("com", "filipelabs", "notif")
@@ -32,11 +32,15 @@ pub fn init_db() -> Result<()> {
             message TEXT NOT NULL,
             priority TEXT NOT NULL DEFAULT 'normal',
             status TEXT NOT NULL DEFAULT 'pending',
+            tags TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             delivered_at TEXT
         )",
         [],
     )?;
+
+    // Migration: add tags column if it doesn't exist (for existing DBs)
+    let _ = conn.execute("ALTER TABLE notifications ADD COLUMN tags TEXT NOT NULL DEFAULT ''", []);
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_status ON notifications(status)",
@@ -51,23 +55,32 @@ pub fn init_db() -> Result<()> {
     Ok(())
 }
 
-pub fn add_notification(message: &str, priority: Priority) -> Result<i64> {
+pub fn add_notification(message: &str, priority: Priority, tags: &[String]) -> Result<i64> {
     let conn = get_connection()?;
     let now = chrono::Utc::now().to_rfc3339();
+    let tags_str = tags.join(",");
 
     conn.execute(
-        "INSERT INTO notifications (message, priority, status, created_at) VALUES (?1, ?2, 'pending', ?3)",
-        params![message, priority.to_string(), now],
+        "INSERT INTO notifications (message, priority, status, tags, created_at) VALUES (?1, ?2, 'pending', ?3, ?4)",
+        params![message, priority.to_string(), tags_str, now],
     )?;
 
     Ok(conn.last_insert_rowid())
 }
 
-pub fn get_pending(limit: usize) -> Result<Vec<Notification>> {
+fn parse_tags(tags_str: &str) -> Vec<String> {
+    if tags_str.is_empty() {
+        Vec::new()
+    } else {
+        tags_str.split(',').map(|s| s.trim().to_string()).collect()
+    }
+}
+
+pub fn get_pending_filtered(limit: usize, filter: Option<&TagFilter>) -> Result<Vec<Notification>> {
     let conn = get_connection()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, message, priority, status, created_at, delivered_at
+        "SELECT id, message, priority, status, tags, created_at, delivered_at
          FROM notifications
          WHERE status = 'pending'
          ORDER BY
@@ -76,30 +89,46 @@ pub fn get_pending(limit: usize) -> Result<Vec<Notification>> {
                 WHEN 'normal' THEN 2
                 WHEN 'low' THEN 3
             END,
-            created_at ASC
-         LIMIT ?1"
+            created_at ASC"
     )?;
 
-    let notifications = stmt.query_map([limit], |row| {
+    let notifications = stmt.query_map([], |row| {
         let priority_str: String = row.get(2)?;
         let priority = priority_str.parse().unwrap_or(Priority::Normal);
+        let tags_str: String = row.get(4)?;
 
         Ok(Notification {
             id: row.get(0)?,
             message: row.get(1)?,
             priority,
             status: row.get(3)?,
-            created_at: row.get(4)?,
-            delivered_at: row.get(5)?,
+            tags: parse_tags(&tags_str),
+            created_at: row.get(5)?,
+            delivered_at: row.get(6)?,
         })
     })?;
 
-    let result: Result<Vec<_>, _> = notifications.collect();
-    Ok(result?)
+    let all: Vec<Notification> = notifications.filter_map(|r| r.ok()).collect();
+
+    // Apply tag filter in memory
+    let filtered: Vec<Notification> = match filter {
+        Some(f) => all.into_iter().filter(|n| f.matches(&n.tags)).collect(),
+        None => all,
+    };
+
+    Ok(filtered.into_iter().take(limit).collect())
+}
+
+pub fn get_pending(limit: usize) -> Result<Vec<Notification>> {
+    get_pending_filtered(limit, None)
 }
 
 pub fn get_all_pending() -> Result<Vec<Notification>> {
-    get_pending(1000)
+    get_pending_filtered(1000, None)
+}
+
+pub fn get_all_pending_filtered(filter: Option<&TagFilter>) -> Result<Vec<Notification>> {
+    get_pending_filtered(1000, filter)
 }
 
 pub fn mark_delivered(ids: &[i64]) -> Result<()> {

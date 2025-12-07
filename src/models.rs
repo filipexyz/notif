@@ -59,6 +59,41 @@ pub struct Notification {
     pub message: String,
     pub priority: Priority,
     pub status: String,
+    pub tags: Vec<String>,
     pub created_at: String,
     pub delivered_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum FilterMode {
+    #[default]
+    Include,
+    Exclude,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagFilter {
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub mode: FilterMode,
+}
+
+impl TagFilter {
+    pub fn matches(&self, notification_tags: &[String]) -> bool {
+        // Tag-less notifications always show
+        if notification_tags.is_empty() {
+            return true;
+        }
+
+        let has_matching_tag = self
+            .tags
+            .iter()
+            .any(|filter_tag| notification_tags.contains(filter_tag));
+
+        match self.mode {
+            FilterMode::Include => has_matching_tag,
+            FilterMode::Exclude => !has_matching_tag,
+        }
+    }
 }

@@ -2,12 +2,21 @@ use anyhow::Result;
 use colored::Colorize;
 
 use crate::db;
-use crate::models::Priority;
+use crate::models::{FilterMode, Priority, TagFilter};
 
-pub fn run() -> Result<()> {
+pub fn run(filter_tags: &[String]) -> Result<()> {
     db::init_db()?;
 
-    let notifications = db::get_all_pending()?;
+    let filter = if filter_tags.is_empty() {
+        None
+    } else {
+        Some(TagFilter {
+            tags: filter_tags.to_vec(),
+            mode: FilterMode::Include,
+        })
+    };
+
+    let notifications = db::get_all_pending_filtered(filter.as_ref())?;
 
     if notifications.is_empty() {
         println!("{}", "No pending notifications".dimmed());
@@ -26,7 +35,13 @@ pub fn run() -> Result<()> {
 
         let id_display = format!("#{}", notif.id).cyan();
 
-        println!("  {} {} {}", id_display, priority_badge, notif.message);
+        let tags_display = if notif.tags.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", notif.tags.join(", ").dimmed())
+        };
+
+        println!("  {} {}{} {}", id_display, priority_badge, tags_display, notif.message);
     }
 
     println!();

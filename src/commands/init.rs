@@ -4,12 +4,28 @@ use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::config;
+use crate::models::{FilterMode, TagFilter};
+
 fn get_claude_settings_path() -> PathBuf {
     let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.join(".claude").join("settings.json")
 }
 
-pub fn run() -> Result<()> {
+pub fn run(tags: &[String]) -> Result<()> {
+    // If tags provided, create .notif.json in current directory
+    if !tags.is_empty() {
+        let filter = TagFilter {
+            tags: tags.to_vec(),
+            mode: FilterMode::Include,
+        };
+        let config_path = config::save_project_config(&filter)?;
+        println!("{}", "Created project config!".green().bold());
+        println!("Path: {}", config_path.display().to_string().cyan());
+        println!("Tags: {}", tags.join(", ").yellow());
+        println!();
+    }
+
     let settings_path = get_claude_settings_path();
 
     // Ensure .claude directory exists
