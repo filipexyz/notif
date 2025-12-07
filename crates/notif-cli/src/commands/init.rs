@@ -1,11 +1,9 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
+use notif_core::{save_project_config, FilterMode, TagFilter};
 use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
-
-use crate::config;
-use crate::models::{FilterMode, TagFilter};
 
 fn get_claude_settings_path() -> PathBuf {
     let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -19,7 +17,7 @@ pub fn run(tags: &[String]) -> Result<()> {
             tags: tags.to_vec(),
             mode: FilterMode::Include,
         };
-        let config_path = config::save_project_config(&filter)?;
+        let config_path = save_project_config(&filter)?;
         println!("{}", "Created project config!".green().bold());
         println!("Path: {}", config_path.display().to_string().cyan());
         println!("Tags: {}", tags.join(", ").yellow());
@@ -105,11 +103,11 @@ pub fn run(tags: &[String]) -> Result<()> {
     println!();
     println!("Path: {}", settings_path.display().to_string().cyan());
     println!();
-    println!("The {} hook will now inject pending notifications", "UserPromptSubmit".yellow());
+    println!("The {} hook will now inject approved notifications", "UserPromptSubmit".yellow());
     println!("into your Claude Code sessions.");
     println!();
     println!("Try it out:");
-    println!("  {} notif add \"Test notification\"", "$".dimmed());
+    println!("  {} notif add --approve \"Test notification\"", "$".dimmed());
     println!("  {} # then chat with Claude", "$".dimmed());
 
     Ok(())

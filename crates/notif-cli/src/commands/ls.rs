@@ -1,11 +1,9 @@
 use anyhow::Result;
 use colored::Colorize;
-
-use crate::db;
-use crate::models::{FilterMode, Priority, TagFilter};
+use notif_core::{get_all_pending_filtered, init_db, FilterMode, Priority, Status, TagFilter};
 
 pub fn run(filter_tags: &[String]) -> Result<()> {
-    db::init_db()?;
+    init_db()?;
 
     let filter = if filter_tags.is_empty() {
         None
@@ -16,7 +14,7 @@ pub fn run(filter_tags: &[String]) -> Result<()> {
         })
     };
 
-    let notifications = db::get_all_pending_filtered(filter.as_ref())?;
+    let notifications = get_all_pending_filtered(filter.as_ref())?;
 
     if notifications.is_empty() {
         println!("{}", "No pending notifications".dimmed());
@@ -33,6 +31,13 @@ pub fn run(filter_tags: &[String]) -> Result<()> {
             Priority::Low => "[LOW]".dimmed(),
         };
 
+        let status_badge = match notif.status {
+            Status::Pending => "[PENDING]".yellow(),
+            Status::Approved => "[APPROVED]".green(),
+            Status::Dismissed => "[DISMISSED]".dimmed(),
+            Status::Delivered => "[DELIVERED]".blue(),
+        };
+
         let id_display = format!("#{}", notif.id).cyan();
 
         let tags_display = if notif.tags.is_empty() {
@@ -41,7 +46,7 @@ pub fn run(filter_tags: &[String]) -> Result<()> {
             format!(" {}", notif.tags.join(", ").dimmed())
         };
 
-        println!("  {} {}{} {}", id_display, priority_badge, tags_display, notif.message);
+        println!("  {} {} {}{} {}", id_display, priority_badge, status_badge, tags_display, notif.message);
     }
 
     println!();

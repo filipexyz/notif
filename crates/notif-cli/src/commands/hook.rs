@@ -1,8 +1,6 @@
 use anyhow::Result;
+use notif_core::{get_approved_filtered, init_db, load_project_config, mark_delivered};
 use std::io::{self, Read};
-
-use crate::config;
-use crate::db;
 
 const MAX_NOTIFICATIONS: usize = 3;
 
@@ -11,11 +9,13 @@ pub fn run() -> Result<()> {
     let mut _input = String::new();
     let _ = io::stdin().read_to_string(&mut _input);
 
-    db::init_db()?;
+    init_db()?;
 
     // Load project config for tag filtering
-    let filter = config::load_project_config();
-    let notifications = db::get_pending_filtered(MAX_NOTIFICATIONS, filter.as_ref())?;
+    let filter = load_project_config();
+
+    // Get APPROVED notifications only (not pending)
+    let notifications = get_approved_filtered(MAX_NOTIFICATIONS, filter.as_ref())?;
 
     if notifications.is_empty() {
         // No output = no context injected
@@ -34,7 +34,7 @@ pub fn run() -> Result<()> {
 
     // Mark as delivered
     let ids: Vec<i64> = notifications.iter().map(|n| n.id).collect();
-    db::mark_delivered(&ids)?;
+    mark_delivered(&ids)?;
 
     Ok(())
 }

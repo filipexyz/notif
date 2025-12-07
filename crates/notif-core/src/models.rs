@@ -38,17 +38,42 @@ impl std::str::FromStr for Priority {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Status {
     Pending,
+    Approved,
+    Dismissed,
     Delivered,
+}
+
+impl Default for Status {
+    fn default() -> Self {
+        Status::Pending
+    }
 }
 
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Status::Pending => write!(f, "pending"),
+            Status::Approved => write!(f, "approved"),
+            Status::Dismissed => write!(f, "dismissed"),
             Status::Delivered => write!(f, "delivered"),
+        }
+    }
+}
+
+impl std::str::FromStr for Status {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "pending" => Ok(Status::Pending),
+            "approved" => Ok(Status::Approved),
+            "dismissed" => Ok(Status::Dismissed),
+            "delivered" => Ok(Status::Delivered),
+            _ => Err(format!("Invalid status: {}", s)),
         }
     }
 }
@@ -58,7 +83,7 @@ pub struct Notification {
     pub id: i64,
     pub message: String,
     pub priority: Priority,
-    pub status: String,
+    pub status: Status,
     pub tags: Vec<String>,
     pub created_at: String,
     pub delivered_at: Option<String>,

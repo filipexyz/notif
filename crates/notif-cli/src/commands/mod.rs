@@ -1,5 +1,7 @@
 pub mod add;
+pub mod approve;
 pub mod clear;
+pub mod dismiss;
 pub mod hook;
 pub mod init;
 pub mod ls;

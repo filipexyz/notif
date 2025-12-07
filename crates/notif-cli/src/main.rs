@@ -1,16 +1,12 @@
 mod commands;
-mod config;
-mod db;
-mod models;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-
-use crate::models::Priority;
+use notif_core::Priority;
 
 #[derive(Parser)]
 #[command(name = "notif")]
-#[command(about = "Claude Code notification center", long_about = None)]
+#[command(about = "Notification center for LLM applications", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -30,6 +26,10 @@ enum Commands {
         /// Tags (comma-separated)
         #[arg(short = 't', long, value_delimiter = ',')]
         tags: Vec<String>,
+
+        /// Auto-approve (skip UI review, inject immediately)
+        #[arg(short = 'a', long)]
+        approve: bool,
     },
 
     /// List pending notifications
@@ -39,10 +39,30 @@ enum Commands {
         tags: Vec<String>,
     },
 
+    /// Approve a pending notification
+    Approve {
+        /// Notification ID to approve
+        id: Option<i64>,
+
+        /// Approve all pending notifications
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Dismiss a pending notification
+    Dismiss {
+        /// Notification ID to dismiss
+        id: Option<i64>,
+
+        /// Dismiss all pending notifications
+        #[arg(long)]
+        all: bool,
+    },
+
     /// Hook mode (called by Claude Code)
     Hook,
 
-    /// Clear delivered notifications
+    /// Clear delivered and dismissed notifications
     Clear,
 
     /// Setup hook in ~/.claude/settings.json and optionally create .notif.json
@@ -57,10 +77,12 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Add { message, priority, tags } => {
-            commands::add::run(&message, priority, &tags)
+        Commands::Add { message, priority, tags, approve } => {
+            commands::add::run(&message, priority, &tags, approve)
         }
         Commands::Ls { tags } => commands::ls::run(&tags),
+        Commands::Approve { id, all } => commands::approve::run(id, all),
+        Commands::Dismiss { id, all } => commands::dismiss::run(id, all),
         Commands::Hook => commands::hook::run(),
         Commands::Clear => commands::clear::run(),
         Commands::Init { tags } => commands::init::run(&tags),

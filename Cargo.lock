@@ -367,11 +367,20 @@ name = "notif"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chrono",
  "clap",
  "colored",
- "directories",
  "dirs-next",
+ "notif-core",
+ "serde_json",
+]
+
+[[package]]
+name = "notif-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "directories",
  "rusqlite",
  "serde",
  "serde_json",

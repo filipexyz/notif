@@ -1,0 +1,17 @@
+[package]
+name = "notif"
+version.workspace = true
+edition.workspace = true
+description = "CLI for notif - notification center for LLMs"
+
+[[bin]]
+name = "notif"
+path = "src/main.rs"
+
+[dependencies]
+notif-core = { path = "../notif-core" }
+anyhow.workspace = true
+clap.workspace = true
+colored.workspace = true
+dirs-next.workspace = true
+serde_json.workspace = true
