@@ -32,11 +32,23 @@ enum Commands {
         approve: bool,
     },
 
-    /// List pending notifications
+    /// List notifications
     Ls {
         /// Filter by tags (comma-separated)
         #[arg(short = 't', long, value_delimiter = ',')]
         tags: Vec<String>,
+
+        /// Show all notifications (not just pending)
+        #[arg(short = 'a', long)]
+        all: bool,
+
+        /// Filter by status (pending, approved, dismissed, delivered)
+        #[arg(short = 's', long)]
+        status: Option<String>,
+
+        /// Maximum number of notifications to show
+        #[arg(short = 'n', long, default_value = "50")]
+        limit: usize,
     },
 
     /// Approve a pending notification
@@ -80,7 +92,7 @@ fn main() -> Result<()> {
         Commands::Add { message, priority, tags, approve } => {
             commands::add::run(&message, priority, &tags, approve)
         }
-        Commands::Ls { tags } => commands::ls::run(&tags),
+        Commands::Ls { tags, all, status, limit } => commands::ls::run(&tags, all, status.as_deref(), limit),
         Commands::Approve { id, all } => commands::approve::run(id, all),
         Commands::Dismiss { id, all } => commands::dismiss::run(id, all),
         Commands::Hook => commands::hook::run(),

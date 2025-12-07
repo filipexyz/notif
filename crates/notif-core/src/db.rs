@@ -234,6 +234,35 @@ pub fn count_approved() -> Result<usize> {
     Ok(count)
 }
 
+pub fn get_all_notifications(limit: usize) -> Result<Vec<Notification>> {
+    let conn = get_connection()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, message, priority, status, tags, created_at, delivered_at
+         FROM notifications
+         ORDER BY created_at DESC
+         LIMIT ?1"
+    )?;
+
+    let notifications = stmt.query_map([limit], row_to_notification)?;
+    Ok(notifications.filter_map(|r| r.ok()).collect())
+}
+
+pub fn get_by_status(status: Status, limit: usize) -> Result<Vec<Notification>> {
+    let conn = get_connection()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, message, priority, status, tags, created_at, delivered_at
+         FROM notifications
+         WHERE status = ?1
+         ORDER BY created_at DESC
+         LIMIT ?2"
+    )?;
+
+    let notifications = stmt.query_map(params![status.to_string(), limit], row_to_notification)?;
+    Ok(notifications.filter_map(|r| r.ok()).collect())
+}
+
 pub fn update_message(id: i64, message: &str) -> Result<()> {
     let conn = get_connection()?;
     conn.execute(
