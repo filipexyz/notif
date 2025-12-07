@@ -5,12 +5,19 @@
   let notifications = $state([]);
   let loading = $state(true);
   let error = $state(null);
+  let activeTab = $state('pending'); // 'pending' or 'history'
+  let statusFilter = $state('all'); // 'all', 'delivered', 'dismissed', 'approved'
 
   async function loadNotifications() {
     try {
       loading = true;
       error = null;
-      notifications = await invoke('get_pending');
+      if (activeTab === 'pending') {
+        notifications = await invoke('get_pending');
+      } else {
+        const filter = statusFilter === 'all' ? null : statusFilter;
+        notifications = await invoke('get_history', { statusFilter: filter, limit: 100 });
+      }
     } catch (e) {
       error = e;
     } finally {
@@ -54,10 +61,24 @@
     }
   }
 
+  function switchTab(tab) {
+    activeTab = tab;
+    loadNotifications();
+  }
+
+  function changeStatusFilter(e) {
+    statusFilter = e.target.value;
+    loadNotifications();
+  }
+
   onMount(() => {
     loadNotifications();
-    // Poll for new notifications every 2 seconds
-    const interval = setInterval(loadNotifications, 2000);
+    // Poll for new notifications every 2 seconds (only for pending tab)
+    const interval = setInterval(() => {
+      if (activeTab === 'pending') {
+        loadNotifications();
+      }
+    }, 2000);
     return () => clearInterval(interval);
   });
 
@@ -68,6 +89,15 @@
       default: return 'priority-normal';
     }
   }
+
+  function getStatusClass(status) {
+    switch (status) {
+      case 'approved': return 'status-approved';
+      case 'dismissed': return 'status-dismissed';
+      case 'delivered': return 'status-delivered';
+      default: return 'status-pending';
+    }
+  }
 </script>
 
 <main>
@@ -76,6 +106,35 @@
     <span class="count">{notifications.length}</span>
   </header>
 
+  <nav class="tabs">
+    <button
+      class="tab"
+      class:active={activeTab === 'pending'}
+      onclick={() => switchTab('pending')}
+    >
+      Pending
+    </button>
+    <button
+      class="tab"
+      class:active={activeTab === 'history'}
+      onclick={() => switchTab('history')}
+    >
+      History
+    </button>
+  </nav>
+
+  {#if activeTab === 'history'}
+    <div class="filter-bar">
+      <select value={statusFilter} onchange={changeStatusFilter}>
+        <option value="all">All</option>
+        <option value="delivered">Delivered</option>
+        <option value="dismissed">Dismissed</option>
+        <option value="approved">Approved</option>
+        <option value="pending">Pending</option>
+      </select>
+    </div>
+  {/if}
+
   {#if error}
     <div class="error">{error}</div>
   {/if}
@@ -83,12 +142,20 @@
   {#if loading && notifications.length === 0}
     <div class="loading">Loading...</div>
   {:else if notifications.length === 0}
-    <div class="empty">No pending notifications</div>
-  {:else}
-    <div class="actions">
-      <button class="approve-all" onclick={approveAll}>Approve All</button>
-      <button class="dismiss-all" onclick={dismissAll}>Dismiss All</button>
+    <div class="empty">
+      {#if activeTab === 'pending'}
+        No pending notifications
+      {:else}
+        No notifications found
+      {/if}
     </div>
+  {:else}
+    {#if activeTab === 'pending'}
+      <div class="actions">
+        <button class="approve-all" onclick={approveAll}>Approve All</button>
+        <button class="dismiss-all" onclick={dismissAll}>Dismiss All</button>
+      </div>
+    {/if}
 
     <ul class="notifications">
       {#each notifications as notif (notif.id)}
@@ -97,20 +164,23 @@
             <div class="meta">
               <span class="id">#{notif.id}</span>
               <span class="priority">{notif.priority}</span>
+              <span class="status {getStatusClass(notif.status)}">{notif.status}</span>
               {#if notif.tags.length > 0}
                 <span class="tags">{notif.tags.join(', ')}</span>
               {/if}
             </div>
             <p class="message">{notif.message}</p>
           </div>
-          <div class="buttons">
-            <button class="approve" onclick={() => approveNotification(notif.id)} title="Approve">
-              ✓
-            </button>
-            <button class="dismiss" onclick={() => dismissNotification(notif.id)} title="Dismiss">
-              ✗
-            </button>
-          </div>
+          {#if activeTab === 'pending'}
+            <div class="buttons">
+              <button class="approve" onclick={() => approveNotification(notif.id)} title="Approve">
+                ✓
+              </button>
+              <button class="dismiss" onclick={() => dismissNotification(notif.id)} title="Dismiss">
+                ✗
+              </button>
+            </div>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -142,7 +212,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
   }
 
   h1 {
@@ -156,6 +226,49 @@
     padding: 0.25rem 0.5rem;
     border-radius: 1rem;
     font-size: 0.875rem;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 0.5rem;
+    border: none;
+    background: #2a2a4a;
+    color: #888;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    transition: all 0.15s;
+  }
+
+  .tab:hover {
+    background: #3a3a5a;
+    color: #aaa;
+  }
+
+  .tab.active {
+    background: #4a4a6a;
+    color: #fff;
+  }
+
+  .filter-bar {
+    margin-bottom: 0.75rem;
+  }
+
+  .filter-bar select {
+    width: 100%;
+    padding: 0.5rem;
+    background: #2a2a4a;
+    color: #eee;
+    border: 1px solid #4a4a6a;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    cursor: pointer;
   }
 
   .error {
@@ -179,7 +292,7 @@
   .actions {
     display: flex;
     gap: 0.5rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 
   .actions button {
@@ -241,6 +354,7 @@
     font-size: 0.75rem;
     color: #888;
     margin-bottom: 0.25rem;
+    flex-wrap: wrap;
   }
 
   .id {
@@ -262,6 +376,34 @@
 
   .priority-low .priority {
     color: #6b7280;
+  }
+
+  .status {
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.2rem;
+    font-size: 0.65rem;
+  }
+
+  .status-pending {
+    background: #f59e0b33;
+    color: #f59e0b;
+  }
+
+  .status-approved {
+    background: #22c55e33;
+    color: #22c55e;
+  }
+
+  .status-dismissed {
+    background: #6b728033;
+    color: #6b7280;
+  }
+
+  .status-delivered {
+    background: #3b82f633;
+    color: #3b82f6;
   }
 
   .tags {
@@ -308,7 +450,7 @@
   }
 
   footer {
-    margin-top: 1rem;
+    margin-top: 0.75rem;
   }
 
   .refresh {
