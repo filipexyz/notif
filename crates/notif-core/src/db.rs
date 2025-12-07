@@ -271,3 +271,9 @@ pub fn update_message(id: i64, message: &str) -> Result<()> {
     )?;
     Ok(())
 }
+
+pub fn delete_notification(id: i64) -> Result<()> {
+    let conn = get_connection()?;
+    conn.execute("DELETE FROM notifications WHERE id = ?1", params![id])?;
+    Ok(())
+}

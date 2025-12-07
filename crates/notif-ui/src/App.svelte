@@ -61,6 +61,15 @@
     }
   }
 
+  async function deleteNotification(id) {
+    try {
+      await invoke('delete_notif', { id });
+      await loadNotifications();
+    } catch (e) {
+      error = e;
+    }
+  }
+
   function switchTab(tab) {
     activeTab = tab;
     loadNotifications();
@@ -171,16 +180,20 @@
             </div>
             <p class="message">{notif.message}</p>
           </div>
-          {#if activeTab === 'pending'}
-            <div class="buttons">
+          <div class="buttons">
+            {#if activeTab === 'pending'}
               <button class="approve" onclick={() => approveNotification(notif.id)} title="Approve">
                 ✓
               </button>
               <button class="dismiss" onclick={() => dismissNotification(notif.id)} title="Dismiss">
                 ✗
               </button>
-            </div>
-          {/if}
+            {:else}
+              <button class="delete" onclick={() => deleteNotification(notif.id)} title="Delete">
+                🗑
+              </button>
+            {/if}
+          </div>
         </li>
       {/each}
     </ul>
@@ -447,6 +460,16 @@
 
   .dismiss:hover {
     background: #4b5563;
+  }
+
+  .delete {
+    background: #dc2626;
+    color: white;
+    flex: 1;
+  }
+
+  .delete:hover {
+    background: #b91c1c;
   }
 
   footer {

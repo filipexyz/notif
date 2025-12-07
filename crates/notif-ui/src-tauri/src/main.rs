@@ -2,8 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use notif_core::{
-    approve, approve_all_pending, dismiss, dismiss_all_pending, get_all_notifications,
-    get_all_pending, get_by_status, init_db, update_message, Notification, Status,
+    approve, approve_all_pending, delete_notification, dismiss, dismiss_all_pending,
+    get_all_notifications, get_all_pending, get_by_status, init_db, update_message, Notification,
+    Status,
 };
 
 #[tauri::command]
@@ -55,6 +56,12 @@ fn dismiss_all() -> Result<usize, String> {
     dismiss_all_pending().map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn delete_notif(id: i64) -> Result<(), String> {
+    init_db().map_err(|e| e.to_string())?;
+    delete_notification(id).map_err(|e| e.to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -66,6 +73,7 @@ fn main() {
             edit_notification,
             approve_all,
             dismiss_all,
+            delete_notif,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
