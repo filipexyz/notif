@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "notif",
+  "productName": "notif.sh",
   "version": "0.1.0",
   "identifier": "sh.notif.ui",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "notif",
+        "title": "notif.sh",
         "width": 400,
         "height": 500,
         "resizable": true,

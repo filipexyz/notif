@@ -1,4 +1,4 @@
-# notif
+# notif.sh
 
 A notification center for Claude Code sessions. Push notifications from anywhere, review them in a desktop UI, and have approved ones injected into your next Claude interaction.
 

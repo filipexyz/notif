@@ -111,7 +111,7 @@
 
 <main>
   <header>
-    <h1>notif</h1>
+    <h1>notif.sh</h1>
     <span class="count">{notifications.length}</span>
   </header>
 
