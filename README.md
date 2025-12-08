@@ -9,6 +9,7 @@ notif/
 ├── crates/
 │   ├── notif-core/    # Shared library (db, models, config)
 │   ├── notif-cli/     # CLI binary
+│   ├── notif-server/  # HTTP server library (webhooks)
 │   └── notif-ui/      # Tauri desktop app
 ```
 
@@ -99,6 +100,8 @@ npm run tauri dev
 | `notif clear` | Remove delivered notifications |
 | `notif init` | Setup hook in `~/.claude/settings.json` |
 | `notif init -t work` | Setup hook + create `.notif.json` |
+| `notif server` | Start HTTP server for webhooks |
+| `notif server --keygen` | Generate a new API key |
 
 ## Status Flow
 
@@ -196,6 +199,84 @@ Optional `.notif.json` in project root:
 {
   "tags": ["work", "myproject"],
   "mode": "include"
+}
+```
+
+## Remote Server (Webhooks)
+
+Run an HTTP server to receive notifications from external services via webhooks.
+
+### Start Server
+
+```bash
+# Start with default settings
+notif server
+
+# Custom host/port
+notif server --host 0.0.0.0 --port 8787
+
+# Generate API key
+notif server --keygen
+```
+
+### Configuration
+
+Environment variables:
+- `NOTIF_API_KEY` - API key for authentication
+- `NOTIF_SERVER_HOST` - Host to bind (default: 127.0.0.1)
+- `NOTIF_SERVER_PORT` - Port to listen on (default: 8787)
+
+Or create `~/.notif/server.toml`:
+
+```toml
+[server]
+host = "0.0.0.0"
+port = 8787
+
+[auth]
+api_key = "notif_your_key_here"
+```
+
+### API Endpoints
+
+All endpoints require `X-API-Key` header.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/webhook` | Create notification |
+| GET | `/notifications` | List (with `?status=pending`) |
+| GET | `/notifications/{id}` | Get single notification |
+| PUT | `/notifications/{id}/approve` | Approve |
+| PUT | `/notifications/{id}/dismiss` | Dismiss |
+| DELETE | `/notifications/{id}` | Delete |
+| POST | `/notifications/approve-all` | Approve all pending |
+| POST | `/notifications/dismiss-all` | Dismiss all pending |
+
+### Webhook Format
+
+```bash
+curl -X POST http://localhost:8787/webhook \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: notif_xxx" \
+  -d '{"message":"Build passed!","priority":"high","tags":["ci","build"]}'
+```
+
+Request body:
+```json
+{
+  "message": "Build passed!",
+  "priority": "high",
+  "tags": ["ci", "build"],
+  "auto_approve": false
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": { "id": 42 },
+  "error": null
 }
 ```
 

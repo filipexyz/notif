@@ -1,0 +1,55 @@
+use axum::{extract::State, Json};
+use notif_core::{add_notification, Priority, Status};
+use serde::{Deserialize, Serialize};
+
+use crate::error::AppError;
+use crate::server::AppState;
+
+#[derive(Debug, Deserialize)]
+pub struct WebhookPayload {
+    pub message: String,
+    #[serde(default)]
+    pub priority: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub auto_approve: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WebhookResponse {
+    pub success: bool,
+    pub data: Option<WebhookData>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WebhookData {
+    pub id: i64,
+}
+
+pub async fn handle_webhook(
+    State(_state): State<AppState>,
+    Json(payload): Json<WebhookPayload>,
+) -> Result<Json<WebhookResponse>, AppError> {
+    let priority = match payload.priority.as_deref() {
+        Some("high") | Some("h") => Priority::High,
+        Some("low") | Some("l") => Priority::Low,
+        _ => Priority::Normal,
+    };
+
+    let status = if payload.auto_approve {
+        Status::Approved
+    } else {
+        Status::Pending
+    };
+
+    let id = add_notification(&payload.message, priority, &payload.tags, status)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    Ok(Json(WebhookResponse {
+        success: true,
+        data: Some(WebhookData { id }),
+        error: None,
+    }))
+}

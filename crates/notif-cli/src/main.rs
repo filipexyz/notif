@@ -83,6 +83,21 @@ enum Commands {
         #[arg(short = 't', long, value_delimiter = ',')]
         tags: Vec<String>,
     },
+
+    /// Start the HTTP server for webhooks
+    Server {
+        /// Host to bind to
+        #[arg(long, default_value = "127.0.0.1")]
+        host: Option<String>,
+
+        /// Port to listen on
+        #[arg(short, long, default_value = "8787")]
+        port: Option<u16>,
+
+        /// Generate a new API key
+        #[arg(long)]
+        keygen: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -98,5 +113,12 @@ fn main() -> Result<()> {
         Commands::Hook => commands::hook::run(),
         Commands::Clear => commands::clear::run(),
         Commands::Init { tags } => commands::init::run(&tags),
+        Commands::Server { host, port, keygen } => {
+            if keygen {
+                commands::server::keygen()
+            } else {
+                commands::server::run(host, port)
+            }
+        }
     }
 }
