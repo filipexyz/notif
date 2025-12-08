@@ -7,6 +7,21 @@
   let error = $state(null);
   let activeTab = $state('pending'); // 'pending' or 'history'
   let statusFilter = $state('all'); // 'all', 'delivered', 'dismissed', 'approved'
+  let expandedIds = $state(new Set()); // Track expanded notifications
+
+  function toggleExpand(id) {
+    if (expandedIds.has(id)) {
+      expandedIds.delete(id);
+    } else {
+      expandedIds.add(id);
+    }
+    expandedIds = new Set(expandedIds); // Trigger reactivity
+  }
+
+  function estimateTokens(content) {
+    if (!content) return 0;
+    return Math.ceil(content.length / 4);
+  }
 
   async function loadNotifications() {
     try {
@@ -168,31 +183,47 @@
 
     <ul class="notifications">
       {#each notifications as notif (notif.id)}
-        <li class="notification {getPriorityClass(notif.priority)}">
-          <div class="content">
-            <div class="meta">
-              <span class="id">#{notif.id}</span>
-              <span class="priority">{notif.priority}</span>
-              <span class="status {getStatusClass(notif.status)}">{notif.status}</span>
-              {#if notif.tags.length > 0}
-                <span class="tags">{notif.tags.join(', ')}</span>
+        <li class="notification {getPriorityClass(notif.priority)}" class:expanded={expandedIds.has(notif.id)}>
+          <div class="content-wrapper">
+            <div class="content">
+              <div class="meta">
+                <span class="id">#{notif.id}</span>
+                <span class="priority">{notif.priority}</span>
+                <span class="status {getStatusClass(notif.status)}">{notif.status}</span>
+                {#if notif.tags.length > 0}
+                  <span class="tags">{notif.tags.join(', ')}</span>
+                {/if}
+              </div>
+              <p class="message">{notif.message}</p>
+              {#if notif.content}
+                <button class="expand-btn" onclick={() => toggleExpand(notif.id)}>
+                  {#if expandedIds.has(notif.id)}
+                    ▼ Hide content
+                  {:else}
+                    ▶ Show content (~{estimateTokens(notif.content)} tokens)
+                  {/if}
+                </button>
+                {#if expandedIds.has(notif.id)}
+                  <div class="expanded-content">
+                    <pre>{notif.content}</pre>
+                  </div>
+                {/if}
               {/if}
             </div>
-            <p class="message">{notif.message}</p>
-          </div>
-          <div class="buttons">
-            {#if activeTab === 'pending'}
-              <button class="approve" onclick={() => approveNotification(notif.id)} title="Approve">
-                ✓
-              </button>
-              <button class="dismiss" onclick={() => dismissNotification(notif.id)} title="Dismiss">
-                ✗
-              </button>
-            {:else}
-              <button class="delete" onclick={() => deleteNotification(notif.id)} title="Delete">
-                🗑
-              </button>
-            {/if}
+            <div class="buttons">
+              {#if activeTab === 'pending'}
+                <button class="approve" onclick={() => approveNotification(notif.id)} title="Approve">
+                  ✓
+                </button>
+                <button class="dismiss" onclick={() => dismissNotification(notif.id)} title="Dismiss">
+                  ✗
+                </button>
+              {:else}
+                <button class="delete" onclick={() => deleteNotification(notif.id)} title="Delete">
+                  🗑
+                </button>
+              {/if}
+            </div>
           </div>
         </li>
       {/each}
@@ -337,11 +368,16 @@
 
   .notification {
     display: flex;
-    align-items: stretch;
+    flex-direction: column;
     background: #2a2a4a;
     border-radius: 0.5rem;
     margin-bottom: 0.5rem;
     overflow: hidden;
+  }
+
+  .content-wrapper {
+    display: flex;
+    align-items: stretch;
   }
 
   .notification.priority-high {
@@ -427,6 +463,42 @@
     margin: 0;
     font-size: 0.9375rem;
     line-height: 1.4;
+  }
+
+  .expand-btn {
+    margin-top: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background: transparent;
+    border: 1px solid #4a4a6a;
+    color: #888;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .expand-btn:hover {
+    background: #3a3a5a;
+    color: #aaa;
+    border-color: #5a5a7a;
+  }
+
+  .expanded-content {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: #1a1a2e;
+    border-radius: 0.25rem;
+    border: 1px solid #3a3a5a;
+  }
+
+  .expanded-content pre {
+    margin: 0;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: #ccc;
   }
 
   .buttons {
