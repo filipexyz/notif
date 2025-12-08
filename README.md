@@ -243,7 +243,7 @@ All endpoints require `X-API-Key` header.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/webhook` | Create notification |
+| POST | `/notifications` | Create notification |
 | GET | `/notifications` | List (with `?status=pending`) |
 | GET | `/notifications/{id}` | Get single notification |
 | PUT | `/notifications/{id}/approve` | Approve |
@@ -252,10 +252,10 @@ All endpoints require `X-API-Key` header.
 | POST | `/notifications/approve-all` | Approve all pending |
 | POST | `/notifications/dismiss-all` | Dismiss all pending |
 
-### Webhook Format
+### Create Notification
 
 ```bash
-curl -X POST http://localhost:8787/webhook \
+curl -X POST http://localhost:8787/notifications \
   -H "Content-Type: application/json" \
   -H "X-API-Key: notif_xxx" \
   -d '{"message":"Build passed!","priority":"high","tags":["ci","build"]}'

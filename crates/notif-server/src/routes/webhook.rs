@@ -6,7 +6,7 @@ use crate::error::AppError;
 use crate::server::AppState;
 
 #[derive(Debug, Deserialize)]
-pub struct WebhookPayload {
+pub struct CreateNotificationRequest {
     pub message: String,
     #[serde(default)]
     pub priority: Option<String>,
@@ -17,21 +17,21 @@ pub struct WebhookPayload {
 }
 
 #[derive(Debug, Serialize)]
-pub struct WebhookResponse {
+pub struct CreateNotificationResponse {
     pub success: bool,
-    pub data: Option<WebhookData>,
+    pub data: Option<CreatedNotification>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct WebhookData {
+pub struct CreatedNotification {
     pub id: i64,
 }
 
-pub async fn handle_webhook(
+pub async fn create_notification(
     State(_state): State<AppState>,
-    Json(payload): Json<WebhookPayload>,
-) -> Result<Json<WebhookResponse>, AppError> {
+    Json(payload): Json<CreateNotificationRequest>,
+) -> Result<Json<CreateNotificationResponse>, AppError> {
     let priority = match payload.priority.as_deref() {
         Some("high") | Some("h") => Priority::High,
         Some("low") | Some("l") => Priority::Low,
@@ -47,9 +47,9 @@ pub async fn handle_webhook(
     let id = add_notification(&payload.message, priority, &payload.tags, status)
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    Ok(Json(WebhookResponse {
+    Ok(Json(CreateNotificationResponse {
         success: true,
-        data: Some(WebhookData { id }),
+        data: Some(CreatedNotification { id }),
         error: None,
     }))
 }
