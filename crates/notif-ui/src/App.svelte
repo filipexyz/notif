@@ -132,6 +132,15 @@
     }
   }
 
+  async function redeliverNotification(id) {
+    try {
+      await invoke('redeliver_notification', { id });
+      await loadNotifications();
+    } catch (e) {
+      error = e;
+    }
+  }
+
   async function addRemote() {
     try {
       const tags = newRemote.tags.split(',').map(t => t.trim()).filter(t => t);
@@ -536,6 +545,11 @@
                     ✗
                   </button>
                 {:else}
+                  {#if notif.status === 'delivered' || notif.status === 'dismissed'}
+                    <button class="redeliver" onclick={() => redeliverNotification(notif.id)} title="Redeliver">
+                      ↻
+                    </button>
+                  {/if}
                   <button class="delete" onclick={() => deleteNotification(notif.id)} title="Delete">
                     🗑
                   </button>
@@ -971,6 +985,16 @@
 
   .delete:hover {
     background: rgba(239, 68, 68, 1);
+  }
+
+  .redeliver {
+    background: rgba(99, 102, 241, 0.8);
+    color: white;
+    flex: 1;
+  }
+
+  .redeliver:hover {
+    background: rgba(99, 102, 241, 1);
   }
 
   /* REMOTES PANEL STYLES */

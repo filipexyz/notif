@@ -65,6 +65,12 @@ fn delete_notif(id: i64) -> Result<(), String> {
     delete_notification(id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn redeliver_notification(id: i64) -> Result<(), String> {
+    init_db().map_err(|e| e.to_string())?;
+    approve(id).map_err(|e| e.to_string())
+}
+
 // Remote management types for UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct RemoteInfo {
@@ -235,6 +241,7 @@ fn main() {
             approve_all,
             dismiss_all,
             delete_notif,
+            redeliver_notification,
             get_remotes,
             add_remote_config,
             remove_remote_config,
