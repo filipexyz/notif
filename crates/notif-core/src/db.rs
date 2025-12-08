@@ -34,13 +34,16 @@ pub fn init_db() -> Result<()> {
             status TEXT NOT NULL DEFAULT 'pending',
             tags TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
-            delivered_at TEXT
+            delivered_at TEXT,
+            content TEXT
         )",
         [],
     )?;
 
     // Migration: add tags column if it doesn't exist (for existing DBs)
     let _ = conn.execute("ALTER TABLE notifications ADD COLUMN tags TEXT NOT NULL DEFAULT ''", []);
+    // Migration: add content column if it doesn't exist
+    let _ = conn.execute("ALTER TABLE notifications ADD COLUMN content TEXT", []);
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_status ON notifications(status)",
@@ -56,13 +59,23 @@ pub fn init_db() -> Result<()> {
 }
 
 pub fn add_notification(message: &str, priority: Priority, tags: &[String], status: Status) -> Result<i64> {
+    add_notification_with_content(message, priority, tags, status, None)
+}
+
+pub fn add_notification_with_content(
+    message: &str,
+    priority: Priority,
+    tags: &[String],
+    status: Status,
+    content: Option<&str>,
+) -> Result<i64> {
     let conn = get_connection()?;
     let now = chrono::Utc::now().to_rfc3339();
     let tags_str = tags.join(",");
 
     conn.execute(
-        "INSERT INTO notifications (message, priority, status, tags, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![message, priority.to_string(), status.to_string(), tags_str, now],
+        "INSERT INTO notifications (message, priority, status, tags, created_at, content) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![message, priority.to_string(), status.to_string(), tags_str, now, content],
     )?;
 
     Ok(conn.last_insert_rowid())
@@ -91,6 +104,7 @@ fn row_to_notification(row: &rusqlite::Row) -> rusqlite::Result<Notification> {
         tags: parse_tags(&tags_str),
         created_at: row.get(5)?,
         delivered_at: row.get(6)?,
+        content: row.get(7)?,
     })
 }
 
@@ -98,7 +112,7 @@ fn get_by_status_filtered(status: &str, limit: usize, filter: Option<&TagFilter>
     let conn = get_connection()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, message, priority, status, tags, created_at, delivered_at
+        "SELECT id, message, priority, status, tags, created_at, delivered_at, content
          FROM notifications
          WHERE status = ?1
          ORDER BY
@@ -238,7 +252,7 @@ pub fn get_all_notifications(limit: usize) -> Result<Vec<Notification>> {
     let conn = get_connection()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, message, priority, status, tags, created_at, delivered_at
+        "SELECT id, message, priority, status, tags, created_at, delivered_at, content
          FROM notifications
          ORDER BY created_at DESC
          LIMIT ?1"
@@ -252,7 +266,7 @@ pub fn get_by_status(status: Status, limit: usize) -> Result<Vec<Notification>> 
     let conn = get_connection()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, message, priority, status, tags, created_at, delivered_at
+        "SELECT id, message, priority, status, tags, created_at, delivered_at, content
          FROM notifications
          WHERE status = ?1
          ORDER BY created_at DESC
@@ -261,6 +275,19 @@ pub fn get_by_status(status: Status, limit: usize) -> Result<Vec<Notification>> 
 
     let notifications = stmt.query_map(params![status.to_string(), limit], row_to_notification)?;
     Ok(notifications.filter_map(|r| r.ok()).collect())
+}
+
+pub fn get_notification_by_id(id: i64) -> Result<Option<Notification>> {
+    let conn = get_connection()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, message, priority, status, tags, created_at, delivered_at, content
+         FROM notifications
+         WHERE id = ?1"
+    )?;
+
+    let mut notifications = stmt.query_map([id], row_to_notification)?;
+    Ok(notifications.next().and_then(|r| r.ok()))
 }
 
 pub fn update_message(id: i64, message: &str) -> Result<()> {

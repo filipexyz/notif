@@ -1,5 +1,5 @@
 use axum::{extract::State, Json};
-use notif_core::{add_notification, Priority, Status};
+use notif_core::{add_notification_with_content, Priority, Status};
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
@@ -14,6 +14,8 @@ pub struct CreateNotificationRequest {
     pub tags: Vec<String>,
     #[serde(default)]
     pub auto_approve: bool,
+    #[serde(default)]
+    pub content: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -44,8 +46,14 @@ pub async fn create_notification(
         Status::Pending
     };
 
-    let id = add_notification(&payload.message, priority, &payload.tags, status)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let id = add_notification_with_content(
+        &payload.message,
+        priority,
+        &payload.tags,
+        status,
+        payload.content.as_deref(),
+    )
+    .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(CreateNotificationResponse {
         success: true,

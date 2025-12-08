@@ -5,4 +5,5 @@ pub mod dismiss;
 pub mod hook;
 pub mod init;
 pub mod ls;
+pub mod read;
 pub mod server;

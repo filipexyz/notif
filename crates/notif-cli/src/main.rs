@@ -30,6 +30,10 @@ enum Commands {
         /// Auto-approve (skip UI review, inject immediately)
         #[arg(short = 'a', long)]
         approve: bool,
+
+        /// Extended content (read with notif read <id>)
+        #[arg(short = 'c', long)]
+        content: Option<String>,
     },
 
     /// List notifications
@@ -77,6 +81,12 @@ enum Commands {
     /// Clear delivered and dismissed notifications
     Clear,
 
+    /// Read full notification content
+    Read {
+        /// Notification ID to read
+        id: i64,
+    },
+
     /// Setup hook in ~/.claude/settings.json and optionally create .notif.json
     Init {
         /// Tags for project config (comma-separated, creates .notif.json)
@@ -104,14 +114,15 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Add { message, priority, tags, approve } => {
-            commands::add::run(&message, priority, &tags, approve)
+        Commands::Add { message, priority, tags, approve, content } => {
+            commands::add::run(&message, priority, &tags, approve, content.as_deref())
         }
         Commands::Ls { tags, all, status, limit } => commands::ls::run(&tags, all, status.as_deref(), limit),
         Commands::Approve { id, all } => commands::approve::run(id, all),
         Commands::Dismiss { id, all } => commands::dismiss::run(id, all),
         Commands::Hook => commands::hook::run(),
         Commands::Clear => commands::clear::run(),
+        Commands::Read { id } => commands::read::run(id),
         Commands::Init { tags } => commands::init::run(&tags),
         Commands::Server { host, port, keygen } => {
             if keygen {

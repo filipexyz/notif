@@ -87,6 +87,15 @@ pub struct Notification {
     pub tags: Vec<String>,
     pub created_at: String,
     pub delivered_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+}
+
+impl Notification {
+    /// Estimate token count for content (roughly 4 chars per token)
+    pub fn content_tokens(&self) -> Option<usize> {
+        self.content.as_ref().map(|c| (c.len() + 3) / 4)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

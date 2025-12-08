@@ -49,8 +49,14 @@ notif add -p high "URGENT: Deploy to prod!"
 notif add -p low "Update docs someday"
 notif add -t work,urgent "Fix the production bug"
 
+# Add with extended content (for longer details)
+notif add "Build failed" -c "Error: test_auth failed at line 42..."
+
 # Add and auto-approve (skip UI review)
 notif add --approve "Inject this immediately"
+
+# Read full notification content
+notif read 16
 
 # Approve/dismiss via CLI
 notif approve 42        # Approve by ID
@@ -90,6 +96,8 @@ npm run tauri dev
 | `notif add --approve <message>` | Add and auto-approve |
 | `notif add -p high <message>` | Add with priority (high/normal/low) |
 | `notif add -t work,urgent <message>` | Add with tags |
+| `notif add -c "content" <message>` | Add with extended content |
+| `notif read <id>` | Read full notification content |
 | `notif approve <id>` | Approve a notification |
 | `notif approve --all` | Approve all pending |
 | `notif dismiss <id>` | Dismiss a notification |
@@ -267,7 +275,8 @@ Request body:
   "message": "Build passed!",
   "priority": "high",
   "tags": ["ci", "build"],
-  "auto_approve": false
+  "auto_approve": false,
+  "content": "Optional extended content with more details..."
 }
 ```
 

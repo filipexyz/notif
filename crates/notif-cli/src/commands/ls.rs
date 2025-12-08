@@ -101,6 +101,14 @@ pub fn run(filter_tags: &[String], all: bool, status_filter: Option<&str>, limit
             "  {} {} {}{} {}",
             id_display, priority_badge, status_badge, tags_display, notif.message
         );
+
+        // Show content hint if content exists
+        if let Some(tokens) = notif.content_tokens() {
+            println!(
+                "    {}",
+                format!("read full content (~{} tokens) with: notif read {}", tokens, notif.id).dimmed()
+            );
+        }
     }
 
     println!();

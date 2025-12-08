@@ -1,12 +1,12 @@
 use anyhow::Result;
 use colored::Colorize;
-use notif_core::{add_notification, init_db, Priority, Status};
+use notif_core::{add_notification_with_content, init_db, Priority, Status};
 
-pub fn run(message: &str, priority: Priority, tags: &[String], approve: bool) -> Result<()> {
+pub fn run(message: &str, priority: Priority, tags: &[String], approve: bool, content: Option<&str>) -> Result<()> {
     init_db()?;
 
     let status = if approve { Status::Approved } else { Status::Pending };
-    let id = add_notification(message, priority, tags, status)?;
+    let id = add_notification_with_content(message, priority, tags, status, content)?;
 
     let priority_display = match priority {
         Priority::High => "high".red(),
@@ -34,6 +34,14 @@ pub fn run(message: &str, priority: Priority, tags: &[String], approve: bool) ->
         tags_display,
         message
     );
+
+    if content.is_some() {
+        let tokens = content.map(|c| (c.len() + 3) / 4).unwrap_or(0);
+        println!(
+            "  {}",
+            format!("with content (~{} tokens) - read with: notif read {}", tokens, id).dimmed()
+        );
+    }
 
     Ok(())
 }
