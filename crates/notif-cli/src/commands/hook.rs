@@ -30,6 +30,10 @@ pub fn run() -> Result<()> {
         } else {
             println!("- [{}] {}", notif.tags.join(", "), notif.message);
         }
+        // Show content hint if content exists
+        if let Some(tokens) = notif.content_tokens() {
+            println!("  (read full content ~{} tokens with: notif read {})", tokens, notif.id);
+        }
     }
 
     // Mark as delivered
