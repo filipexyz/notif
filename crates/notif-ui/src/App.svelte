@@ -202,16 +202,37 @@
     return date.toLocaleDateString();
   }
 
+  // Silent background pull (no UI state changes)
+  async function silentPullAll() {
+    try {
+      const count = await invoke('pull_all_remotes');
+      if (count > 0 && activeTab === 'pending') {
+        await loadNotifications();
+      }
+    } catch (e) {
+      // Silently ignore errors for background pulls
+    }
+  }
+
   onMount(() => {
     loadNotifications();
-    const interval = setInterval(() => {
+
+    // UI refresh interval (2s)
+    const refreshInterval = setInterval(() => {
       if (activeTab === 'pending') {
         loadNotifications();
       } else if (activeTab === 'remotes') {
         loadRemotes();
       }
     }, 2000);
-    return () => clearInterval(interval);
+
+    // Remote pull interval (1s)
+    const pullInterval = setInterval(silentPullAll, 1000);
+
+    return () => {
+      clearInterval(refreshInterval);
+      clearInterval(pullInterval);
+    };
   });
 
   function getPriorityClass(priority) {
