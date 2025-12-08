@@ -78,6 +78,36 @@ impl std::str::FromStr for Status {
     }
 }
 
+/// Source type for a notification
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SourceType {
+    #[default]
+    Local,
+    Remote,
+}
+
+impl fmt::Display for SourceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SourceType::Local => write!(f, "local"),
+            SourceType::Remote => write!(f, "remote"),
+        }
+    }
+}
+
+impl std::str::FromStr for SourceType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "local" => Ok(SourceType::Local),
+            "remote" => Ok(SourceType::Remote),
+            _ => Err(format!("Invalid source type: {}", s)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Notification {
     pub id: i64,
@@ -89,6 +119,12 @@ pub struct Notification {
     pub delivered_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
+    #[serde(default)]
+    pub source_type: SourceType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_remote: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<i64>,
 }
 
 impl Notification {

@@ -4,7 +4,7 @@ use rusqlite::{params, Connection};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::models::{Notification, Priority, Status, TagFilter};
+use crate::models::{Notification, Priority, SourceType, Status, TagFilter};
 
 pub fn get_db_path() -> Result<PathBuf> {
     let proj_dirs = ProjectDirs::from("com", "filipelabs", "notif")
@@ -44,6 +44,10 @@ pub fn init_db() -> Result<()> {
     let _ = conn.execute("ALTER TABLE notifications ADD COLUMN tags TEXT NOT NULL DEFAULT ''", []);
     // Migration: add content column if it doesn't exist
     let _ = conn.execute("ALTER TABLE notifications ADD COLUMN content TEXT", []);
+    // Migration: add source columns for remote notification tracking
+    let _ = conn.execute("ALTER TABLE notifications ADD COLUMN source_type TEXT NOT NULL DEFAULT 'local'", []);
+    let _ = conn.execute("ALTER TABLE notifications ADD COLUMN source_remote TEXT", []);
+    let _ = conn.execute("ALTER TABLE notifications ADD COLUMN source_id INTEGER", []);
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_status ON notifications(status)",
@@ -52,6 +56,21 @@ pub fn init_db() -> Result<()> {
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_priority ON notifications(priority)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_source ON notifications(source_type, source_remote, source_id)",
+        [],
+    )?;
+
+    // Create sync state table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS remote_sync_state (
+            remote_name TEXT PRIMARY KEY,
+            last_synced_id INTEGER NOT NULL DEFAULT 0,
+            last_synced_at TEXT
+        )",
         [],
     )?;
 
@@ -95,6 +114,8 @@ fn row_to_notification(row: &rusqlite::Row) -> rusqlite::Result<Notification> {
     let status_str: String = row.get(3)?;
     let status = status_str.parse().unwrap_or(Status::Pending);
     let tags_str: String = row.get(4)?;
+    let source_type_str: String = row.get(8)?;
+    let source_type = source_type_str.parse().unwrap_or(SourceType::Local);
 
     Ok(Notification {
         id: row.get(0)?,
@@ -105,6 +126,9 @@ fn row_to_notification(row: &rusqlite::Row) -> rusqlite::Result<Notification> {
         created_at: row.get(5)?,
         delivered_at: row.get(6)?,
         content: row.get(7)?,
+        source_type,
+        source_remote: row.get(9)?,
+        source_id: row.get(10)?,
     })
 }
 
@@ -112,7 +136,7 @@ fn get_by_status_filtered(status: &str, limit: usize, filter: Option<&TagFilter>
     let conn = get_connection()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, message, priority, status, tags, created_at, delivered_at, content
+        "SELECT id, message, priority, status, tags, created_at, delivered_at, content, source_type, source_remote, source_id
          FROM notifications
          WHERE status = ?1
          ORDER BY
@@ -252,7 +276,7 @@ pub fn get_all_notifications(limit: usize) -> Result<Vec<Notification>> {
     let conn = get_connection()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, message, priority, status, tags, created_at, delivered_at, content
+        "SELECT id, message, priority, status, tags, created_at, delivered_at, content, source_type, source_remote, source_id
          FROM notifications
          ORDER BY created_at DESC
          LIMIT ?1"
@@ -266,7 +290,7 @@ pub fn get_by_status(status: Status, limit: usize) -> Result<Vec<Notification>> 
     let conn = get_connection()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, message, priority, status, tags, created_at, delivered_at, content
+        "SELECT id, message, priority, status, tags, created_at, delivered_at, content, source_type, source_remote, source_id
          FROM notifications
          WHERE status = ?1
          ORDER BY created_at DESC
@@ -281,7 +305,7 @@ pub fn get_notification_by_id(id: i64) -> Result<Option<Notification>> {
     let conn = get_connection()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, message, priority, status, tags, created_at, delivered_at, content
+        "SELECT id, message, priority, status, tags, created_at, delivered_at, content, source_type, source_remote, source_id
          FROM notifications
          WHERE id = ?1"
     )?;
@@ -303,4 +327,81 @@ pub fn delete_notification(id: i64) -> Result<()> {
     let conn = get_connection()?;
     conn.execute("DELETE FROM notifications WHERE id = ?1", params![id])?;
     Ok(())
+}
+
+/// Add a notification from a remote source
+pub fn add_remote_notification(
+    message: &str,
+    priority: Priority,
+    tags: &[String],
+    status: Status,
+    content: Option<&str>,
+    source_remote: &str,
+    source_id: i64,
+) -> Result<i64> {
+    let conn = get_connection()?;
+    let now = chrono::Utc::now().to_rfc3339();
+    let tags_str = tags.join(",");
+
+    conn.execute(
+        "INSERT INTO notifications (message, priority, status, tags, created_at, content, source_type, source_remote, source_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'remote', ?7, ?8)",
+        params![message, priority.to_string(), status.to_string(), tags_str, now, content, source_remote, source_id],
+    )?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+/// Check if a remote notification already exists (deduplication)
+pub fn remote_notification_exists(source_remote: &str, source_id: i64) -> Result<bool> {
+    let conn = get_connection()?;
+    let count: usize = conn.query_row(
+        "SELECT COUNT(*) FROM notifications WHERE source_remote = ?1 AND source_id = ?2",
+        params![source_remote, source_id],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+/// Get notifications for pull endpoint (created after a given ID)
+pub fn get_notifications_since(since_id: i64, limit: usize) -> Result<Vec<Notification>> {
+    let conn = get_connection()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, message, priority, status, tags, created_at, delivered_at, content, source_type, source_remote, source_id
+         FROM notifications
+         WHERE id > ?1 AND source_type = 'local'
+         ORDER BY id ASC
+         LIMIT ?2"
+    )?;
+
+    let notifications = stmt.query_map(params![since_id, limit], row_to_notification)?;
+    Ok(notifications.filter_map(|r| r.ok()).collect())
+}
+
+/// Get notifications for pull endpoint filtered by tags
+pub fn get_notifications_since_with_tags(since_id: i64, tags: &[String], limit: usize) -> Result<Vec<Notification>> {
+    let conn = get_connection()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, message, priority, status, tags, created_at, delivered_at, content, source_type, source_remote, source_id
+         FROM notifications
+         WHERE id > ?1 AND source_type = 'local'
+         ORDER BY id ASC
+         LIMIT ?2"
+    )?;
+
+    let notifications = stmt.query_map(params![since_id, limit], row_to_notification)?;
+    let all: Vec<Notification> = notifications.filter_map(|r| r.ok()).collect();
+
+    // Filter by tags in memory (notification must have at least one matching tag, or tags filter is empty)
+    if tags.is_empty() {
+        return Ok(all);
+    }
+
+    let filtered = all.into_iter().filter(|n| {
+        n.tags.iter().any(|t| tags.contains(t))
+    }).collect();
+
+    Ok(filtered)
 }

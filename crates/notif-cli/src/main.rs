@@ -108,6 +108,67 @@ enum Commands {
         #[arg(long)]
         keygen: bool,
     },
+
+    /// Manage remote servers
+    Remote {
+        #[command(subcommand)]
+        action: RemoteAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum RemoteAction {
+    /// List configured remotes
+    #[command(alias = "ls")]
+    List,
+
+    /// Add a new remote server
+    Add {
+        /// Name for this remote
+        name: String,
+
+        /// Server URL (e.g., https://server:8787)
+        #[arg(short, long)]
+        url: String,
+
+        /// API key for authentication
+        #[arg(short = 'k', long)]
+        api_key: String,
+
+        /// Mode: store (persist locally) or passthrough (direct output)
+        #[arg(short, long, default_value = "store")]
+        mode: Option<String>,
+
+        /// Tags to filter (comma-separated)
+        #[arg(short, long, value_delimiter = ',')]
+        tags: Vec<String>,
+
+        /// Auto-approve pulled notifications (store mode only)
+        #[arg(short, long)]
+        approve: bool,
+    },
+
+    /// Remove a remote
+    #[command(alias = "rm")]
+    Remove {
+        /// Name of the remote to remove
+        name: String,
+    },
+
+    /// Test connection to a remote
+    Test {
+        /// Name of the remote to test
+        name: String,
+    },
+
+    /// Show sync status for all remotes
+    Status,
+
+    /// Pull notifications from remotes
+    Pull {
+        /// Specific remote to pull from (omit for all)
+        name: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -131,5 +192,15 @@ fn main() -> Result<()> {
                 commands::server::run(host, port)
             }
         }
+        Commands::Remote { action } => match action {
+            RemoteAction::List => commands::remote::list(),
+            RemoteAction::Add { name, url, api_key, mode, tags, approve } => {
+                commands::remote::add(&name, &url, &api_key, mode.as_deref(), &tags, approve)
+            }
+            RemoteAction::Remove { name } => commands::remote::rm(&name),
+            RemoteAction::Test { name } => commands::remote::test(&name),
+            RemoteAction::Status => commands::remote::status(),
+            RemoteAction::Pull { name } => commands::remote::pull(name.as_deref()),
+        },
     }
 }

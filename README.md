@@ -110,6 +110,12 @@ npm run tauri dev
 | `notif init -t work` | Setup hook + create `.notif.json` |
 | `notif server` | Start HTTP server for webhooks |
 | `notif server --keygen` | Generate a new API key |
+| `notif remote list` | List configured remotes |
+| `notif remote add <name>` | Add a remote server |
+| `notif remote remove <name>` | Remove a remote |
+| `notif remote test <name>` | Test connection |
+| `notif remote pull [name]` | Pull from remotes |
+| `notif remote status` | Show sync status |
 
 ## Status Flow
 
@@ -253,6 +259,7 @@ All endpoints require `X-API-Key` header.
 |--------|----------|-------------|
 | POST | `/notifications` | Create notification |
 | GET | `/notifications` | List (with `?status=pending`) |
+| GET | `/notifications/pull` | Pull for remote sync |
 | GET | `/notifications/{id}` | Get single notification |
 | PUT | `/notifications/{id}/approve` | Approve |
 | PUT | `/notifications/{id}/dismiss` | Dismiss |
@@ -308,6 +315,104 @@ docker build -t filipeai/notif:latest .
 
 # Generate an API key
 docker run --rm filipeai/notif:latest notif server --keygen
+```
+
+## Remote Integration
+
+Connect to remote notif servers to pull notifications from CI/CD pipelines, other machines, or team servers.
+
+### Configure Remotes
+
+Remotes are configured in `~/.notif/remotes.toml`:
+
+```toml
+[[remotes]]
+name = "ci-server"
+url = "https://ci.example.com:8787"
+api_key = "notif_abc123..."
+mode = "passthrough"  # or "store"
+tags = ["ci", "build"]  # filter, empty = all
+auto_approve = false    # only for mode="store"
+
+[[remotes]]
+name = "work-server"
+url = "https://work.example.com:8787"
+api_key = "notif_def456..."
+mode = "store"
+auto_approve = true
+```
+
+### Add Remotes via CLI
+
+```bash
+# Add a passthrough remote (shows notifications directly)
+notif remote add ci-server \
+  -u https://ci.example.com:8787 \
+  -k notif_abc123 \
+  -m passthrough
+
+# Add a store remote (saves locally for review)
+notif remote add work-server \
+  -u https://work.example.com:8787 \
+  -k notif_def456 \
+  -m store \
+  --approve  # auto-approve pulled notifications
+
+# Test connection
+notif remote test ci-server
+
+# List configured remotes
+notif remote list
+
+# Check sync status
+notif remote status
+
+# Manual pull from all remotes
+notif remote pull
+
+# Pull from specific remote
+notif remote pull ci-server
+```
+
+### Remote Modes
+
+| Mode | Behavior |
+|------|----------|
+| `store` | Pull notifications and save them locally. They go through the normal pending → approved → delivered flow. |
+| `passthrough` | Pull notifications and output them directly to Claude without storing locally. Good for real-time CI notifications. |
+
+### How Remote Pull Works
+
+1. When you run `notif hook` (triggered by Claude), it checks for configured remotes
+2. For each remote, it pulls new notifications since the last sync
+3. **Store mode**: Notifications are saved locally with `pending` (or `approved` if auto-approve) status
+4. **Passthrough mode**: Notifications are included directly in the hook output
+5. Sync state is updated so you don't see the same notifications twice
+
+### Example: CI/CD Integration
+
+On your CI server:
+```bash
+# Deploy notif server
+docker run -d -p 8787:8787 \
+  -e NOTIF_API_KEY=notif_ci_key \
+  filipeai/notif:latest
+
+# Send notification from CI pipeline
+curl -X POST https://ci.example.com:8787/notifications \
+  -H "X-API-Key: notif_ci_key" \
+  -d '{"message":"Build #123 passed!","tags":["ci"],"auto_approve":true}'
+```
+
+On your laptop:
+```bash
+# Add the CI remote
+notif remote add ci \
+  -u https://ci.example.com:8787 \
+  -k notif_ci_key \
+  -m passthrough
+
+# Now when you chat with Claude, CI notifications appear automatically!
 ```
 
 ## Development

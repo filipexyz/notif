@@ -4,7 +4,8 @@ use axum::{
 };
 use notif_core::{
     approve, approve_all_pending, delete_notification, dismiss, dismiss_all_pending,
-    get_all_notifications, get_by_status, Notification, Status,
+    get_all_notifications, get_by_status, get_notifications_since, get_notifications_since_with_tags,
+    Notification, Status,
 };
 use serde::{Deserialize, Serialize};
 
@@ -119,4 +120,48 @@ pub async fn dismiss_all(
 ) -> Result<Json<ApiResponse<CountResponse>>, AppError> {
     let count = dismiss_all_pending().map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(Json(ApiResponse::ok(CountResponse { count })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PullQuery {
+    #[serde(default)]
+    pub since_id: i64,
+    pub tags: Option<String>,
+    #[serde(default = "default_pull_limit")]
+    pub limit: usize,
+}
+
+fn default_pull_limit() -> usize {
+    100
+}
+
+#[derive(Debug, Serialize)]
+pub struct PullResponse {
+    pub notifications: Vec<Notification>,
+    pub last_id: i64,
+}
+
+// GET /notifications/pull - Fetch notifications since a given ID (for remote sync)
+pub async fn pull_notifications(
+    State(_state): State<AppState>,
+    Query(query): Query<PullQuery>,
+) -> Result<Json<PullResponse>, AppError> {
+    let notifications = if let Some(tags_str) = &query.tags {
+        let tags: Vec<String> = tags_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        get_notifications_since_with_tags(query.since_id, &tags, query.limit)
+    } else {
+        get_notifications_since(query.since_id, query.limit)
+    }
+    .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let last_id = notifications.last().map(|n| n.id).unwrap_or(query.since_id);
+
+    Ok(Json(PullResponse {
+        notifications,
+        last_id,
+    }))
 }

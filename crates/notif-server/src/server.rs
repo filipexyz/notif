@@ -34,6 +34,7 @@ pub fn create_app(config: Config) -> Router {
         // Notification API
         .route("/notifications", get(api::list_notifications))
         .route("/notifications", post(webhook::create_notification))
+        .route("/notifications/pull", get(api::pull_notifications))
         .route("/notifications/{id}", get(api::get_notification))
         .route("/notifications/{id}/approve", put(api::approve_notification))
         .route("/notifications/{id}/dismiss", put(api::dismiss_notification))
