@@ -17,6 +17,33 @@
   let pullingRemote = $state(null);
   let testResults = $state({});
 
+  // Settings (persisted to localStorage)
+  let autoSync = $state(localStorage.getItem('notif_autoSync') !== 'false');
+  let pullIntervalId = $state(null);
+
+  function toggleAutoSync() {
+    autoSync = !autoSync;
+    localStorage.setItem('notif_autoSync', autoSync.toString());
+    if (autoSync) {
+      startPullInterval();
+    } else {
+      stopPullInterval();
+    }
+  }
+
+  function startPullInterval() {
+    if (!pullIntervalId) {
+      pullIntervalId = setInterval(silentPullAll, 1000);
+    }
+  }
+
+  function stopPullInterval() {
+    if (pullIntervalId) {
+      clearInterval(pullIntervalId);
+      pullIntervalId = null;
+    }
+  }
+
   function toggleExpand(id) {
     if (expandedIds.has(id)) {
       expandedIds.delete(id);
@@ -226,12 +253,14 @@
       }
     }, 2000);
 
-    // Remote pull interval (1s)
-    const pullInterval = setInterval(silentPullAll, 1000);
+    // Start auto-sync if enabled
+    if (autoSync) {
+      startPullInterval();
+    }
 
     return () => {
       clearInterval(refreshInterval);
-      clearInterval(pullInterval);
+      stopPullInterval();
     };
   });
 
@@ -257,6 +286,9 @@
   <header>
     <h1>notif.sh</h1>
     <span class="count">{activeTab === 'remotes' ? remotes.length : notifications.length}</span>
+    <button class="sync-toggle" class:active={autoSync} onclick={toggleAutoSync} title={autoSync ? 'Auto-sync ON' : 'Auto-sync OFF'}>
+      <span class="sync-icon">{autoSync ? '⟳' : '○'}</span>
+    </button>
   </header>
 
   <nav class="tabs">
@@ -569,6 +601,46 @@
     font-size: 0.8rem;
     font-weight: 500;
     color: #a5b4fc;
+  }
+
+  .sync-toggle {
+    margin-left: auto;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #6b7280;
+  }
+
+  .sync-toggle:hover {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: rgba(99, 102, 241, 0.4);
+  }
+
+  .sync-toggle.active {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #10b981;
+  }
+
+  .sync-toggle.active:hover {
+    background: rgba(16, 185, 129, 0.25);
+  }
+
+  .sync-icon {
+    font-size: 1rem;
+    display: inline-block;
+  }
+
+  .sync-toggle.active .sync-icon {
+    animation: spin 2s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 
   .tabs {
