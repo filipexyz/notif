@@ -289,6 +289,27 @@ Response:
 }
 ```
 
+## Docker (Server Hosting)
+
+Deploy the notification server with Docker:
+
+```bash
+# Build and run with docker-compose
+NOTIF_API_KEY=notif_your_secret_key docker-compose up -d
+
+# Or run directly
+docker run -d -p 8787:8787 \
+  -e NOTIF_API_KEY=notif_your_secret_key \
+  -v notif-data:/data \
+  filipeai/notif:latest
+
+# Build locally
+docker build -t filipeai/notif:latest .
+
+# Generate an API key
+docker run --rm filipeai/notif:latest notif server --keygen
+```
+
 ## Development
 
 ```bash
