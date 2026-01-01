@@ -31,14 +31,7 @@ COPY --from=builder /go/bin/goose /usr/local/bin/goose
 COPY db/migrations /app/migrations
 
 # Entrypoint script
-COPY <<'EOF' /app/entrypoint.sh
-#!/bin/sh
-set -e
-echo "Running database migrations..."
-goose -dir /app/migrations postgres "$DATABASE_URL" up
-echo "Migrations complete. Starting server..."
-exec /app/notifd
-EOF
+COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8080
