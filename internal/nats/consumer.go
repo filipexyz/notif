@@ -11,6 +11,7 @@ import (
 // SubscriptionOptions configures a consumer subscription.
 type SubscriptionOptions struct {
 	Topics     []string
+	OrgID      string // Required: filter by organization
 	Group      string // Empty = ephemeral, non-empty = durable consumer group
 	AutoAck    bool
 	MaxRetries int
@@ -38,12 +39,17 @@ func NewConsumerManager(stream jetstream.Stream) *ConsumerManager {
 
 // CreateConsumer creates a JetStream consumer for the given options.
 func (cm *ConsumerManager) CreateConsumer(ctx context.Context, opts SubscriptionOptions) (jetstream.Consumer, error) {
-	// Convert topics to NATS subjects with wildcards
-	// "leads.*" -> "events.leads.*"
-	// "agent.*.error" -> "events.agent.*.error"
+	// OrgID is required for multi-tenant isolation
+	if opts.OrgID == "" {
+		return nil, fmt.Errorf("org_id is required for subscriptions")
+	}
+
+	// Convert topics to NATS subjects with org isolation
+	// "leads.*" -> "events.{org_id}.leads.*"
+	// "agent.*.error" -> "events.{org_id}.agent.*.error"
 	filterSubjects := make([]string, len(opts.Topics))
 	for i, topic := range opts.Topics {
-		filterSubjects[i] = "events." + topic
+		filterSubjects[i] = "events." + opts.OrgID + "." + topic
 	}
 
 	config := jetstream.ConsumerConfig{

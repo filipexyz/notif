@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/filipexyz/notif/internal/domain"
@@ -22,6 +23,7 @@ func NewEventReader(stream jetstream.Stream) *EventReader {
 // QueryOptions configures event queries.
 type QueryOptions struct {
 	Topic string
+	OrgID string    // Required: filter by organization
 	From  time.Time // Start time (inclusive)
 	To    time.Time // End time (exclusive), zero means now
 	Limit int
@@ -34,16 +36,23 @@ type StoredEvent struct {
 	Timestamp time.Time     `json:"timestamp"`
 }
 
-// Query retrieves events matching the options.
+// Query retrieves events matching the options (filtered by org).
 func (r *EventReader) Query(ctx context.Context, opts QueryOptions) ([]StoredEvent, error) {
 	if opts.Limit <= 0 {
 		opts.Limit = 100
 	}
 
-	// Build filter subject
-	filterSubject := "events.>"
+	// OrgID is required for multi-tenant isolation
+	if opts.OrgID == "" {
+		return nil, fmt.Errorf("org_id is required for event queries")
+	}
+
+	// Build filter subject with org isolation: events.{org_id}.{topic}
+	var filterSubject string
 	if opts.Topic != "" {
-		filterSubject = "events." + opts.Topic
+		filterSubject = "events." + opts.OrgID + "." + opts.Topic
+	} else {
+		filterSubject = "events." + opts.OrgID + ".>"
 	}
 
 	// Create consumer config based on time range

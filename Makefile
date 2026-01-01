@@ -32,7 +32,11 @@ test:
 test-e2e:
 	go test -v -race -timeout 5m ./tests/e2e/...
 
-# Run all tests
+# Run integration tests (requires: make dev && make seed && make run)
+test-integration:
+	go test -v -race -tags=integration ./tests/integration/...
+
+# Run all tests (excludes integration tests that need a running server)
 test-all:
 	go test -v -race -timeout 5m ./...
 

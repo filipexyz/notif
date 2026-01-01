@@ -63,8 +63,15 @@ func (h *SubscribeHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		apiKeyID = uuid.UUID(apiKey.ID.Bytes).String()
 	}
 
+	// Get org_id from auth context for multi-tenant isolation
+	authCtx := middleware.GetAuthContext(r.Context())
+	orgID := ""
+	if authCtx != nil {
+		orgID = authCtx.OrgID
+	}
+
 	clientID := generateClientID()
-	client := websocket.NewClient(h.hub, conn, apiKeyID, h.dlqPublisher, h.queries, clientID)
+	client := websocket.NewClient(h.hub, conn, apiKeyID, orgID, h.dlqPublisher, h.queries, clientID)
 	h.hub.Register(client)
 
 	slog.Info("websocket client connected", "client_id", clientID)

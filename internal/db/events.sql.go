@@ -22,15 +22,27 @@ func (q *Queries) CountEventsByAPIKey(ctx context.Context, apiKeyID pgtype.UUID)
 	return count, err
 }
 
+const countEventsByOrg = `-- name: CountEventsByOrg :one
+SELECT COUNT(*) FROM events WHERE org_id = $1
+`
+
+func (q *Queries) CountEventsByOrg(ctx context.Context, orgID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countEventsByOrg, orgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createEvent = `-- name: CreateEvent :exec
-INSERT INTO events (id, topic, api_key_id, payload_size, created_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO events (id, topic, api_key_id, org_id, payload_size, created_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateEventParams struct {
 	ID          string             `json:"id"`
 	Topic       string             `json:"topic"`
 	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
+	OrgID       string             `json:"org_id"`
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
@@ -40,6 +52,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) error 
 		arg.ID,
 		arg.Topic,
 		arg.ApiKeyID,
+		arg.OrgID,
 		arg.PayloadSize,
 		arg.CreatedAt,
 	)
@@ -47,50 +60,226 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) error 
 }
 
 const getEvent = `-- name: GetEvent :one
-SELECT id, topic, api_key_id, payload_size, created_at
+SELECT id, topic, api_key_id, org_id, payload_size, created_at
 FROM events
 WHERE id = $1
 `
 
-func (q *Queries) GetEvent(ctx context.Context, id string) (Event, error) {
+type GetEventRow struct {
+	ID          string             `json:"id"`
+	Topic       string             `json:"topic"`
+	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
+	OrgID       string             `json:"org_id"`
+	PayloadSize int32              `json:"payload_size"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetEvent(ctx context.Context, id string) (GetEventRow, error) {
 	row := q.db.QueryRow(ctx, getEvent, id)
-	var i Event
+	var i GetEventRow
 	err := row.Scan(
 		&i.ID,
 		&i.Topic,
 		&i.ApiKeyID,
+		&i.OrgID,
 		&i.PayloadSize,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
-const listEventsByTopic = `-- name: ListEventsByTopic :many
-SELECT id, topic, api_key_id, payload_size, created_at
+const getEventByIDAndOrg = `-- name: GetEventByIDAndOrg :one
+SELECT id, topic, api_key_id, org_id, payload_size, created_at
 FROM events
-WHERE topic LIKE $1
+WHERE id = $1 AND org_id = $2
+`
+
+type GetEventByIDAndOrgParams struct {
+	ID    string `json:"id"`
+	OrgID string `json:"org_id"`
+}
+
+type GetEventByIDAndOrgRow struct {
+	ID          string             `json:"id"`
+	Topic       string             `json:"topic"`
+	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
+	OrgID       string             `json:"org_id"`
+	PayloadSize int32              `json:"payload_size"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetEventByIDAndOrg(ctx context.Context, arg GetEventByIDAndOrgParams) (GetEventByIDAndOrgRow, error) {
+	row := q.db.QueryRow(ctx, getEventByIDAndOrg, arg.ID, arg.OrgID)
+	var i GetEventByIDAndOrgRow
+	err := row.Scan(
+		&i.ID,
+		&i.Topic,
+		&i.ApiKeyID,
+		&i.OrgID,
+		&i.PayloadSize,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getEventStats = `-- name: GetEventStats :one
+SELECT
+    COUNT(*) as total,
+    COUNT(CASE WHEN created_at > NOW() - INTERVAL '24 hours' THEN 1 END) as last_24h,
+    COUNT(CASE WHEN created_at > NOW() - INTERVAL '1 hour' THEN 1 END) as last_hour
+FROM events
+WHERE org_id = $1
+`
+
+type GetEventStatsRow struct {
+	Total    int64 `json:"total"`
+	Last24h  int64 `json:"last_24h"`
+	LastHour int64 `json:"last_hour"`
+}
+
+func (q *Queries) GetEventStats(ctx context.Context, orgID string) (GetEventStatsRow, error) {
+	row := q.db.QueryRow(ctx, getEventStats, orgID)
+	var i GetEventStatsRow
+	err := row.Scan(&i.Total, &i.Last24h, &i.LastHour)
+	return i, err
+}
+
+const listEventsByOrg = `-- name: ListEventsByOrg :many
+SELECT id, topic, api_key_id, org_id, payload_size, created_at
+FROM events
+WHERE org_id = $1
 ORDER BY created_at DESC
 LIMIT $2
 `
 
-type ListEventsByTopicParams struct {
-	Topic string `json:"topic"`
+type ListEventsByOrgParams struct {
+	OrgID string `json:"org_id"`
 	Limit int32  `json:"limit"`
 }
 
-func (q *Queries) ListEventsByTopic(ctx context.Context, arg ListEventsByTopicParams) ([]Event, error) {
-	rows, err := q.db.Query(ctx, listEventsByTopic, arg.Topic, arg.Limit)
+type ListEventsByOrgRow struct {
+	ID          string             `json:"id"`
+	Topic       string             `json:"topic"`
+	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
+	OrgID       string             `json:"org_id"`
+	PayloadSize int32              `json:"payload_size"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListEventsByOrg(ctx context.Context, arg ListEventsByOrgParams) ([]ListEventsByOrgRow, error) {
+	rows, err := q.db.Query(ctx, listEventsByOrg, arg.OrgID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Event{}
+	items := []ListEventsByOrgRow{}
 	for rows.Next() {
-		var i Event
+		var i ListEventsByOrgRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Topic,
 			&i.ApiKeyID,
+			&i.OrgID,
+			&i.PayloadSize,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEventsByOrgAndTopic = `-- name: ListEventsByOrgAndTopic :many
+SELECT id, topic, api_key_id, org_id, payload_size, created_at
+FROM events
+WHERE org_id = $1 AND topic LIKE $2
+ORDER BY created_at DESC
+LIMIT $3
+`
+
+type ListEventsByOrgAndTopicParams struct {
+	OrgID string `json:"org_id"`
+	Topic string `json:"topic"`
+	Limit int32  `json:"limit"`
+}
+
+type ListEventsByOrgAndTopicRow struct {
+	ID          string             `json:"id"`
+	Topic       string             `json:"topic"`
+	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
+	OrgID       string             `json:"org_id"`
+	PayloadSize int32              `json:"payload_size"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListEventsByOrgAndTopic(ctx context.Context, arg ListEventsByOrgAndTopicParams) ([]ListEventsByOrgAndTopicRow, error) {
+	rows, err := q.db.Query(ctx, listEventsByOrgAndTopic, arg.OrgID, arg.Topic, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEventsByOrgAndTopicRow{}
+	for rows.Next() {
+		var i ListEventsByOrgAndTopicRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Topic,
+			&i.ApiKeyID,
+			&i.OrgID,
+			&i.PayloadSize,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEventsByTopicAndOrg = `-- name: ListEventsByTopicAndOrg :many
+SELECT id, topic, api_key_id, org_id, payload_size, created_at
+FROM events
+WHERE topic LIKE $1 AND org_id = $2
+ORDER BY created_at DESC
+LIMIT $3
+`
+
+type ListEventsByTopicAndOrgParams struct {
+	Topic string `json:"topic"`
+	OrgID string `json:"org_id"`
+	Limit int32  `json:"limit"`
+}
+
+type ListEventsByTopicAndOrgRow struct {
+	ID          string             `json:"id"`
+	Topic       string             `json:"topic"`
+	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
+	OrgID       string             `json:"org_id"`
+	PayloadSize int32              `json:"payload_size"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListEventsByTopicAndOrg(ctx context.Context, arg ListEventsByTopicAndOrgParams) ([]ListEventsByTopicAndOrgRow, error) {
+	rows, err := q.db.Query(ctx, listEventsByTopicAndOrg, arg.Topic, arg.OrgID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEventsByTopicAndOrgRow{}
+	for rows.Next() {
+		var i ListEventsByTopicAndOrgRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Topic,
+			&i.ApiKeyID,
+			&i.OrgID,
 			&i.PayloadSize,
 			&i.CreatedAt,
 		); err != nil {

@@ -22,8 +22,13 @@ func NewPublisher(js jetstream.JetStream) *Publisher {
 
 // Publish sends an event to JetStream.
 func (p *Publisher) Publish(ctx context.Context, event *domain.Event) error {
-	// Convert topic: "leads.new" -> "events.leads.new"
-	subject := "events." + event.Topic
+	// Strict org_id enforcement - no anonymous events allowed
+	if event.OrgID == "" {
+		return fmt.Errorf("org_id is required for publishing events")
+	}
+
+	// Subject format: events.{org_id}.{topic}
+	subject := "events." + event.OrgID + "." + event.Topic
 
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -41,6 +46,7 @@ func (p *Publisher) Publish(ctx context.Context, event *domain.Event) error {
 	slog.Debug("event published",
 		"event_id", event.ID,
 		"topic", event.Topic,
+		"org_id", event.OrgID,
 		"stream", ack.Stream,
 		"seq", ack.Sequence,
 	)

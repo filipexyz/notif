@@ -33,6 +33,7 @@ SELECT ed.*, w.url as webhook_url
 FROM event_deliveries ed
 LEFT JOIN webhooks w ON ed.receiver_type = 'webhook' AND ed.receiver_id = w.id
 WHERE ed.event_id = $1
+  AND ed.event_id IN (SELECT e.id FROM events e WHERE e.org_id = $2)
 ORDER BY ed.created_at DESC;
 
 -- name: GetDeliveriesByConsumer :many

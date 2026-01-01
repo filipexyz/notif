@@ -223,8 +223,14 @@ SELECT ed.id, ed.event_id, ed.receiver_type, ed.receiver_id, ed.consumer_name, e
 FROM event_deliveries ed
 LEFT JOIN webhooks w ON ed.receiver_type = 'webhook' AND ed.receiver_id = w.id
 WHERE ed.event_id = $1
+  AND ed.event_id IN (SELECT e.id FROM events e WHERE e.org_id = $2)
 ORDER BY ed.created_at DESC
 `
+
+type GetEventDeliveriesWithWebhookURLParams struct {
+	EventID string `json:"event_id"`
+	OrgID   string `json:"org_id"`
+}
 
 type GetEventDeliveriesWithWebhookURLRow struct {
 	ID           pgtype.UUID        `json:"id"`
@@ -242,8 +248,8 @@ type GetEventDeliveriesWithWebhookURLRow struct {
 	WebhookUrl   pgtype.Text        `json:"webhook_url"`
 }
 
-func (q *Queries) GetEventDeliveriesWithWebhookURL(ctx context.Context, eventID string) ([]GetEventDeliveriesWithWebhookURLRow, error) {
-	rows, err := q.db.Query(ctx, getEventDeliveriesWithWebhookURL, eventID)
+func (q *Queries) GetEventDeliveriesWithWebhookURL(ctx context.Context, arg GetEventDeliveriesWithWebhookURLParams) ([]GetEventDeliveriesWithWebhookURLRow, error) {
+	rows, err := q.db.Query(ctx, getEventDeliveriesWithWebhookURL, arg.EventID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}

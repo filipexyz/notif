@@ -65,9 +65,9 @@ func (h *StatsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 
 	resp := OverviewResponse{}
 
-	// Events stats from NATS
-	if streamInfo, err := h.eventReader.StreamInfo(r.Context()); err == nil {
-		resp.Events.Total = streamInfo.State.Msgs
+	// Events stats from database (org-scoped)
+	if count, err := h.queries.CountEventsByOrg(r.Context(), orgID); err == nil {
+		resp.Events.Total = uint64(count)
 	}
 
 	// Webhook stats
@@ -83,8 +83,8 @@ func (h *StatsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// DLQ stats
-	if dlqCount, err := h.dlqReader.Count(r.Context()); err == nil {
+	// DLQ stats (org-scoped)
+	if dlqCount, err := h.dlqReader.Count(r.Context(), orgID); err == nil {
 		resp.DLQ.Pending = dlqCount
 	}
 
@@ -110,25 +110,25 @@ type StreamStats struct {
 	LastSeq   uint64 `json:"last_seq"`
 }
 
-// Events returns event/stream stats.
+// Events returns event/stream stats (org-scoped).
 func (h *StatsHandler) Events(w http.ResponseWriter, r *http.Request) {
-	streamInfo, err := h.eventReader.StreamInfo(r.Context())
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get stream info"})
+	orgID := middleware.GetOrgIDFromContext(r.Context())
+	if orgID == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "org_id required"})
 		return
 	}
 
-	resp := EventsStatsResponse{
-		Stream: StreamStats{
-			Messages:  streamInfo.State.Msgs,
-			Bytes:     streamInfo.State.Bytes,
-			Consumers: streamInfo.State.Consumers,
-			FirstSeq:  streamInfo.State.FirstSeq,
-			LastSeq:   streamInfo.State.LastSeq,
-		},
+	stats, err := h.queries.GetEventStats(r.Context(), orgID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get event stats"})
+		return
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":    stats.Total,
+		"last_24h": stats.Last24h,
+		"last_1h":  stats.LastHour,
+	})
 }
 
 // WebhooksStatsResponse is the response for webhook stats.
@@ -212,9 +212,15 @@ type DLQStatsResponse struct {
 	Total int64 `json:"total"`
 }
 
-// DLQ returns DLQ stats.
+// DLQ returns DLQ stats (org-scoped).
 func (h *StatsHandler) DLQ(w http.ResponseWriter, r *http.Request) {
-	count, err := h.dlqReader.Count(r.Context())
+	orgID := middleware.GetOrgIDFromContext(r.Context())
+	if orgID == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "org_id required"})
+		return
+	}
+
+	count, err := h.dlqReader.Count(r.Context(), orgID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get DLQ stats"})
 		return

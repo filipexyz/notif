@@ -72,18 +72,23 @@ func (h *EmitHandler) Emit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store event metadata (async, don't block response)
+	// Store event metadata (sync, ensures event exists for delivery queries)
 	apiKey := middleware.GetAPIKey(r.Context())
-	if apiKey != nil {
-		go func() {
-			_ = h.queries.CreateEvent(r.Context(), db.CreateEventParams{
-				ID:          event.ID,
-				Topic:       event.Topic,
-				ApiKeyID:    apiKey.ID,
-				PayloadSize: int32(len(req.Data)),
-				CreatedAt:   pgtype.Timestamptz{Time: event.Timestamp, Valid: true},
-			})
-		}()
+	if authCtx != nil && authCtx.OrgID != "" {
+		params := db.CreateEventParams{
+			ID:          event.ID,
+			Topic:       event.Topic,
+			OrgID:       authCtx.OrgID,
+			PayloadSize: int32(len(req.Data)),
+			CreatedAt:   pgtype.Timestamptz{Time: event.Timestamp, Valid: true},
+		}
+		if apiKey != nil {
+			params.ApiKeyID = apiKey.ID
+		}
+		if err := h.queries.CreateEvent(r.Context(), params); err != nil {
+			slog.Error("failed to store event metadata", "error", err, "event_id", event.ID)
+			// Don't fail the request, event was already published to NATS
+		}
 	}
 
 	slog.Info("event emitted",

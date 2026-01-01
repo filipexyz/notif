@@ -34,6 +34,7 @@ type Event struct {
 	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	OrgID       string             `json:"org_id"`
 }
 
 type EventDelivery struct {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/filipexyz/notif/internal/db"
+	"github.com/filipexyz/notif/internal/middleware"
 	"github.com/filipexyz/notif/internal/nats"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -22,10 +23,17 @@ func NewEventsHandler(reader *nats.EventReader, queries *db.Queries) *EventsHand
 	return &EventsHandler{reader: reader, queries: queries}
 }
 
-// List returns historical events.
+// List returns historical events filtered by org.
 func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil || authCtx.OrgID == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
 	opts := nats.QueryOptions{
 		Topic: r.URL.Query().Get("topic"),
+		OrgID: authCtx.OrgID,
 		Limit: 100,
 	}
 
@@ -71,8 +79,14 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Get returns a specific event by sequence number.
+// Get returns a specific event by sequence number (with org verification).
 func (h *EventsHandler) Get(w http.ResponseWriter, r *http.Request) {
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil || authCtx.OrgID == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
 	seqStr := chi.URLParam(r, "seq")
 	seq, err := strconv.ParseUint(seqStr, 10, 64)
 	if err != nil {
@@ -84,6 +98,14 @@ func (h *EventsHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	event, err := h.reader.GetBySeq(r.Context(), seq)
 	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "event not found",
+		})
+		return
+	}
+
+	// Verify org ownership - critical security check
+	if event.Event.OrgID != authCtx.OrgID {
 		writeJSON(w, http.StatusNotFound, map[string]string{
 			"error": "event not found",
 		})
@@ -116,14 +138,23 @@ func (h *EventsHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 // Deliveries returns all deliveries (webhooks and websocket) for a specific event.
 func (h *EventsHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil || authCtx.OrgID == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
 	eventID := chi.URLParam(r, "id")
 	if eventID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "event id required"})
 		return
 	}
 
-	// Get unified deliveries with webhook URLs
-	deliveries, err := h.queries.GetEventDeliveriesWithWebhookURL(r.Context(), eventID)
+	// Get unified deliveries with webhook URLs (org-scoped)
+	deliveries, err := h.queries.GetEventDeliveriesWithWebhookURL(r.Context(), db.GetEventDeliveriesWithWebhookURLParams{
+		EventID: eventID,
+		OrgID:   authCtx.OrgID,
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get deliveries"})
 		return

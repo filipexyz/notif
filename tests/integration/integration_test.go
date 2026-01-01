@@ -1,8 +1,10 @@
+//go:build integration
+
 // Package integration provides integration tests that run against
 // local docker-compose services (make dev).
 //
-// Run with: make test-integration
-// Requires: docker-compose services running (make dev && make seed)
+// Run with: go test -tags=integration ./tests/integration/...
+// Requires: docker-compose services running (make dev && make seed && make run)
 package integration
 
 import (
@@ -20,7 +22,7 @@ import (
 
 const (
 	// TestAPIKey is the seeded test key from scripts/seed.sql
-	TestAPIKey = "nsh_test_abcdefghij1234567890ab"
+	TestAPIKey = "nsh_test_abcdefghij12345678901234"
 )
 
 var baseURL string
@@ -96,7 +98,7 @@ func TestReady(t *testing.T) {
 
 func TestEmit_Unauthorized(t *testing.T) {
 	payload := `{"topic": "test.hello", "data": {"msg": "hello"}}`
-	resp, err := http.Post(baseURL+"/emit", "application/json", strings.NewReader(payload))
+	resp, err := http.Post(baseURL+"/api/v1/emit", "application/json", strings.NewReader(payload))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -109,7 +111,7 @@ func TestEmit_Unauthorized(t *testing.T) {
 
 func TestEmit_InvalidKey(t *testing.T) {
 	payload := `{"topic": "test.hello", "data": {"msg": "hello"}}`
-	req, _ := http.NewRequest("POST", baseURL+"/emit", strings.NewReader(payload))
+	req, _ := http.NewRequest("POST", baseURL+"/api/v1/emit", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer nsh_test_invalidkey12345678901")
 
@@ -126,7 +128,7 @@ func TestEmit_InvalidKey(t *testing.T) {
 
 func TestEmit_Success(t *testing.T) {
 	payload := `{"topic": "test.integration", "data": {"msg": "hello world"}}`
-	req, _ := http.NewRequest("POST", baseURL+"/emit", strings.NewReader(payload))
+	req, _ := http.NewRequest("POST", baseURL+"/api/v1/emit", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -160,7 +162,7 @@ func TestEmit_Success(t *testing.T) {
 
 func TestEmit_EmptyTopic(t *testing.T) {
 	payload := `{"topic": "", "data": {"msg": "hello"}}`
-	req, _ := http.NewRequest("POST", baseURL+"/emit", strings.NewReader(payload))
+	req, _ := http.NewRequest("POST", baseURL+"/api/v1/emit", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -177,7 +179,7 @@ func TestEmit_EmptyTopic(t *testing.T) {
 
 func TestEmit_InvalidTopic(t *testing.T) {
 	payload := `{"topic": "$internal", "data": {"msg": "hello"}}`
-	req, _ := http.NewRequest("POST", baseURL+"/emit", strings.NewReader(payload))
+	req, _ := http.NewRequest("POST", baseURL+"/api/v1/emit", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -194,7 +196,7 @@ func TestEmit_InvalidTopic(t *testing.T) {
 
 func TestWebSocket_Unauthorized(t *testing.T) {
 	wsURL := strings.Replace(baseURL, "http://", "ws://", 1)
-	_, resp, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe", nil)
+	_, resp, err := websocket.DefaultDialer.Dial(wsURL+"/ws", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -205,7 +207,7 @@ func TestWebSocket_Unauthorized(t *testing.T) {
 
 func TestWebSocket_Subscribe(t *testing.T) {
 	wsURL := strings.Replace(baseURL, "http://", "ws://", 1)
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -235,7 +237,7 @@ func TestWebSocket_Subscribe(t *testing.T) {
 
 func TestWebSocket_PingPong(t *testing.T) {
 	wsURL := strings.Replace(baseURL, "http://", "ws://", 1)
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -258,7 +260,7 @@ func TestEmitAndReceive(t *testing.T) {
 	wsURL := strings.Replace(baseURL, "http://", "ws://", 1)
 
 	// Connect WebSocket
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -289,7 +291,7 @@ func TestEmitAndReceive(t *testing.T) {
 		"topic": "e2e.test",
 		"data":  eventData,
 	})
-	req, _ := http.NewRequest("POST", baseURL+"/emit", bytes.NewReader(payload))
+	req, _ := http.NewRequest("POST", baseURL+"/api/v1/emit", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -323,7 +325,7 @@ func TestManualAck(t *testing.T) {
 	wsURL := strings.Replace(baseURL, "http://", "ws://", 1)
 
 	// Connect with manual ack
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -343,7 +345,7 @@ func TestManualAck(t *testing.T) {
 
 	// Emit event
 	payload := `{"topic": "ack-test.manual", "data": {"ack": true}}`
-	req, _ := http.NewRequest("POST", baseURL+"/emit", strings.NewReader(payload))
+	req, _ := http.NewRequest("POST", baseURL+"/api/v1/emit", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 	resp, _ := http.DefaultClient.Do(req)
@@ -377,7 +379,7 @@ func TestManualAck(t *testing.T) {
 func TestAckUnknownEvent(t *testing.T) {
 	wsURL := strings.Replace(baseURL, "http://", "ws://", 1)
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

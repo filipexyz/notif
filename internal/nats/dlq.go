@@ -12,6 +12,7 @@ import (
 // DLQMessage represents a message in the dead letter queue.
 type DLQMessage struct {
 	ID            string          `json:"id"`
+	OrgID         string          `json:"org_id"`
 	OriginalTopic string          `json:"original_topic"`
 	Data          json.RawMessage `json:"data"`
 	Timestamp     time.Time       `json:"timestamp"`
@@ -33,13 +34,18 @@ func NewDLQPublisher(js jetstream.JetStream) *DLQPublisher {
 
 // Publish sends a failed message to the DLQ.
 func (p *DLQPublisher) Publish(ctx context.Context, msg *DLQMessage) error {
+	// OrgID is required for multi-tenant isolation
+	if msg.OrgID == "" {
+		return fmt.Errorf("org_id is required for DLQ messages")
+	}
+
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("marshal DLQ message: %w", err)
 	}
 
-	// Subject format: dlq.<original_topic>
-	subject := "dlq." + msg.OriginalTopic
+	// Subject format: dlq.{org_id}.<original_topic>
+	subject := "dlq." + msg.OrgID + "." + msg.OriginalTopic
 
 	_, err = p.js.Publish(ctx, subject, data)
 	if err != nil {
@@ -71,16 +77,24 @@ type DLQEntry struct {
 	Message *DLQMessage `json:"message"`
 }
 
-// List returns messages from the DLQ, optionally filtered by topic.
-func (r *DLQReader) List(ctx context.Context, topic string, limit int) ([]DLQEntry, error) {
+// List returns messages from the DLQ, filtered by org and optionally by topic.
+func (r *DLQReader) List(ctx context.Context, orgID, topic string, limit int) ([]DLQEntry, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 
-	// Create ephemeral consumer to read messages
-	filterSubject := "dlq.>"
+	// OrgID is required for multi-tenant isolation
+	if orgID == "" {
+		return nil, fmt.Errorf("org_id is required for DLQ queries")
+	}
+
+	// Create ephemeral consumer to read messages with org filtering
+	// Subject format: dlq.{org_id}.{topic}
+	var filterSubject string
 	if topic != "" {
-		filterSubject = "dlq." + topic
+		filterSubject = "dlq." + orgID + "." + topic
+	} else {
+		filterSubject = "dlq." + orgID + ".>"
 	}
 
 	consumer, err := r.stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
@@ -146,13 +160,30 @@ func (r *DLQReader) Delete(ctx context.Context, seq uint64) error {
 	return r.stream.DeleteMsg(ctx, seq)
 }
 
-// Count returns the total number of messages in the DLQ.
-func (r *DLQReader) Count(ctx context.Context) (int64, error) {
-	info, err := r.stream.Info(ctx)
-	if err != nil {
-		return 0, err
+// Count returns the total number of messages in the DLQ for a specific org.
+func (r *DLQReader) Count(ctx context.Context, orgID string) (int64, error) {
+	if orgID == "" {
+		return 0, fmt.Errorf("org_id is required for DLQ count")
 	}
-	return int64(info.State.Msgs), nil
+
+	// Create ephemeral consumer to count messages for this org
+	filterSubject := "dlq." + orgID + ".>"
+
+	consumer, err := r.stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		FilterSubject: filterSubject,
+		AckPolicy:     jetstream.AckNonePolicy,
+		DeliverPolicy: jetstream.DeliverAllPolicy,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("create DLQ consumer: %w", err)
+	}
+
+	info, err := consumer.Info(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("get consumer info: %w", err)
+	}
+
+	return int64(info.NumPending), nil
 }
 
 // Replay republishes a DLQ message to its original topic.
@@ -162,15 +193,22 @@ func (r *DLQReader) Replay(ctx context.Context, seq uint64, publisher *Publisher
 		return err
 	}
 
-	// Republish to original topic
+	// OrgID is required for multi-tenant isolation
+	if entry.Message.OrgID == "" {
+		return fmt.Errorf("org_id is required for replay")
+	}
+
+	// Republish to original topic with org isolation
 	event := struct {
 		ID        string          `json:"id"`
+		OrgID     string          `json:"org_id"`
 		Topic     string          `json:"topic"`
 		Data      json.RawMessage `json:"data"`
 		Timestamp time.Time       `json:"timestamp"`
 		Attempt   int             `json:"attempt"`
 	}{
 		ID:        entry.Message.ID,
+		OrgID:     entry.Message.OrgID,
 		Topic:     entry.Message.OriginalTopic,
 		Data:      entry.Message.Data,
 		Timestamp: entry.Message.Timestamp,
@@ -182,7 +220,8 @@ func (r *DLQReader) Replay(ctx context.Context, seq uint64, publisher *Publisher
 		return fmt.Errorf("marshal event: %w", err)
 	}
 
-	subject := "events." + entry.Message.OriginalTopic
+	// Subject format: events.{org_id}.{topic}
+	subject := "events." + entry.Message.OrgID + "." + entry.Message.OriginalTopic
 	_, err = r.js.Publish(ctx, subject, data)
 	if err != nil {
 		return fmt.Errorf("republish event: %w", err)
