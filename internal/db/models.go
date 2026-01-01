@@ -12,7 +12,6 @@ type ApiKey struct {
 	ID                 pgtype.UUID        `json:"id"`
 	KeyHash            string             `json:"key_hash"`
 	KeyPrefix          string             `json:"key_prefix"`
-	Environment        string             `json:"environment"`
 	Name               pgtype.Text        `json:"name"`
 	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
@@ -33,21 +32,19 @@ type Event struct {
 	ID          string             `json:"id"`
 	Topic       string             `json:"topic"`
 	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
-	Environment string             `json:"environment"`
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type Webhook struct {
-	ID          pgtype.UUID        `json:"id"`
-	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
-	Url         string             `json:"url"`
-	Topics      []string           `json:"topics"`
-	Secret      string             `json:"secret"`
-	Enabled     bool               `json:"enabled"`
-	Environment string             `json:"environment"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID        pgtype.UUID        `json:"id"`
+	ApiKeyID  pgtype.UUID        `json:"api_key_id"`
+	Url       string             `json:"url"`
+	Topics    []string           `json:"topics"`
+	Secret    string             `json:"secret"`
+	Enabled   bool               `json:"enabled"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type WebhookDelivery struct {

@@ -31,13 +31,12 @@ type CreateWebhookRequest struct {
 
 // WebhookResponse is the response for a webhook.
 type WebhookResponse struct {
-	ID          string   `json:"id"`
-	URL         string   `json:"url"`
-	Topics      []string `json:"topics"`
-	Secret      string   `json:"secret,omitempty"` // Only returned on create
-	Enabled     bool     `json:"enabled"`
-	Environment string   `json:"environment"`
-	CreatedAt   string   `json:"created_at"`
+	ID        string   `json:"id"`
+	URL       string   `json:"url"`
+	Topics    []string `json:"topics"`
+	Secret    string   `json:"secret,omitempty"` // Only returned on create
+	Enabled   bool     `json:"enabled"`
+	CreatedAt string   `json:"created_at"`
 }
 
 // Create creates a new webhook.
@@ -67,11 +66,10 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	secret := generateSecret()
 
 	webhook, err := h.queries.CreateWebhook(r.Context(), db.CreateWebhookParams{
-		ApiKeyID:    apiKey.ID,
-		Url:         req.URL,
-		Topics:      req.Topics,
-		Secret:      secret,
-		Environment: apiKey.Environment,
+		ApiKeyID: apiKey.ID,
+		Url:      req.URL,
+		Topics:   req.Topics,
+		Secret:   secret,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create webhook"})
@@ -79,13 +77,12 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, WebhookResponse{
-		ID:          uuid.UUID(webhook.ID.Bytes).String(),
-		URL:         webhook.Url,
-		Topics:      webhook.Topics,
-		Secret:      webhook.Secret, // Return secret only on create
-		Enabled:     webhook.Enabled,
-		Environment: webhook.Environment,
-		CreatedAt:   webhook.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
+		ID:        uuid.UUID(webhook.ID.Bytes).String(),
+		URL:       webhook.Url,
+		Topics:    webhook.Topics,
+		Secret:    webhook.Secret, // Return secret only on create
+		Enabled:   webhook.Enabled,
+		CreatedAt: webhook.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
 	})
 }
 
@@ -106,12 +103,11 @@ func (h *WebhookHandler) List(w http.ResponseWriter, r *http.Request) {
 	results := make([]WebhookResponse, len(webhooks))
 	for i, wh := range webhooks {
 		results[i] = WebhookResponse{
-			ID:          uuid.UUID(wh.ID.Bytes).String(),
-			URL:         wh.Url,
-			Topics:      wh.Topics,
-			Enabled:     wh.Enabled,
-			Environment: wh.Environment,
-			CreatedAt:   wh.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
+			ID:        uuid.UUID(wh.ID.Bytes).String(),
+			URL:       wh.Url,
+			Topics:    wh.Topics,
+			Enabled:   wh.Enabled,
+			CreatedAt: wh.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
 		}
 	}
 
@@ -144,12 +140,11 @@ func (h *WebhookHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, WebhookResponse{
-		ID:          uuid.UUID(webhook.ID.Bytes).String(),
-		URL:         webhook.Url,
-		Topics:      webhook.Topics,
-		Enabled:     webhook.Enabled,
-		Environment: webhook.Environment,
-		CreatedAt:   webhook.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
+		ID:        uuid.UUID(webhook.ID.Bytes).String(),
+		URL:       webhook.Url,
+		Topics:    webhook.Topics,
+		Enabled:   webhook.Enabled,
+		CreatedAt: webhook.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
 	})
 }
 
@@ -215,12 +210,11 @@ func (h *WebhookHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, WebhookResponse{
-		ID:          uuid.UUID(updated.ID.Bytes).String(),
-		URL:         updated.Url,
-		Topics:      updated.Topics,
-		Enabled:     updated.Enabled,
-		Environment: updated.Environment,
-		CreatedAt:   updated.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
+		ID:        uuid.UUID(updated.ID.Bytes).String(),
+		URL:       updated.Url,
+		Topics:    updated.Topics,
+		Enabled:   updated.Enabled,
+		CreatedAt: updated.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
 	})
 }
 

@@ -76,7 +76,6 @@ func (h *EmitHandler) Emit(w http.ResponseWriter, r *http.Request) {
 				ID:          event.ID,
 				Topic:       event.Topic,
 				ApiKeyID:    apiKey.ID,
-				Environment: apiKey.Environment,
 				PayloadSize: int32(len(req.Data)),
 				CreatedAt:   pgtype.Timestamptz{Time: event.Timestamp, Valid: true},
 			})

@@ -23,15 +23,14 @@ func (q *Queries) CountEventsByAPIKey(ctx context.Context, apiKeyID pgtype.UUID)
 }
 
 const createEvent = `-- name: CreateEvent :exec
-INSERT INTO events (id, topic, api_key_id, environment, payload_size, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO events (id, topic, api_key_id, payload_size, created_at)
+VALUES ($1, $2, $3, $4, $5)
 `
 
 type CreateEventParams struct {
 	ID          string             `json:"id"`
 	Topic       string             `json:"topic"`
 	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
-	Environment string             `json:"environment"`
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
@@ -41,7 +40,6 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) error 
 		arg.ID,
 		arg.Topic,
 		arg.ApiKeyID,
-		arg.Environment,
 		arg.PayloadSize,
 		arg.CreatedAt,
 	)
@@ -49,7 +47,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) error 
 }
 
 const getEvent = `-- name: GetEvent :one
-SELECT id, topic, api_key_id, environment, payload_size, created_at
+SELECT id, topic, api_key_id, payload_size, created_at
 FROM events
 WHERE id = $1
 `
@@ -61,7 +59,6 @@ func (q *Queries) GetEvent(ctx context.Context, id string) (Event, error) {
 		&i.ID,
 		&i.Topic,
 		&i.ApiKeyID,
-		&i.Environment,
 		&i.PayloadSize,
 		&i.CreatedAt,
 	)
@@ -69,7 +66,7 @@ func (q *Queries) GetEvent(ctx context.Context, id string) (Event, error) {
 }
 
 const listEventsByTopic = `-- name: ListEventsByTopic :many
-SELECT id, topic, api_key_id, environment, payload_size, created_at
+SELECT id, topic, api_key_id, payload_size, created_at
 FROM events
 WHERE topic LIKE $1
 ORDER BY created_at DESC
@@ -94,7 +91,6 @@ func (q *Queries) ListEventsByTopic(ctx context.Context, arg ListEventsByTopicPa
 			&i.ID,
 			&i.Topic,
 			&i.ApiKeyID,
-			&i.Environment,
 			&i.PayloadSize,
 			&i.CreatedAt,
 		); err != nil {

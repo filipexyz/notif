@@ -47,13 +47,11 @@ func (h *SubscribeHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 
 	apiKey := middleware.GetAPIKey(r.Context())
 	apiKeyID := ""
-	env := "live"
 	if apiKey != nil {
 		apiKeyID = uuid.UUID(apiKey.ID.Bytes).String()
-		env = apiKey.Environment
 	}
 
-	client := websocket.NewClient(h.hub, conn, apiKeyID, env, h.dlqPublisher)
+	client := websocket.NewClient(h.hub, conn, apiKeyID, h.dlqPublisher)
 	h.hub.Register(client)
 
 	// Start read/write pumps with a fresh context (not the HTTP request context)

@@ -33,7 +33,6 @@ type Client struct {
 	conn     *websocket.Conn
 	send     chan []byte
 	apiKeyID string
-	env      string
 
 	// Subscription state
 	mu              sync.RWMutex
@@ -47,13 +46,12 @@ type Client struct {
 }
 
 // NewClient creates a new WebSocket client.
-func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, env string, dlqPublisher *nats.DLQPublisher) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID string, dlqPublisher *nats.DLQPublisher) *Client {
 	return &Client{
 		hub:             hub,
 		conn:            conn,
 		send:            make(chan []byte, 256),
 		apiKeyID:        apiKeyID,
-		env:             env,
 		pendingMessages: make(map[string]*pendingMsg),
 		maxRetries:      5,
 		dlqPublisher:    dlqPublisher,

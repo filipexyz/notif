@@ -1,6 +1,6 @@
 -- name: CreateWebhook :one
-INSERT INTO webhooks (api_key_id, url, topics, secret, environment)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO webhooks (api_key_id, url, topics, secret)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetWebhook :one
@@ -13,7 +13,7 @@ ORDER BY created_at DESC;
 
 -- name: GetEnabledWebhooks :many
 SELECT * FROM webhooks
-WHERE enabled = true AND environment = $1
+WHERE enabled = true
 ORDER BY created_at;
 
 -- name: UpdateWebhook :one

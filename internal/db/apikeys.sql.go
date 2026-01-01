@@ -12,15 +12,14 @@ import (
 )
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO api_keys (key_hash, key_prefix, environment, name, rate_limit_per_second, org_id)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, key_prefix, environment, name, rate_limit_per_second, created_at, org_id
+INSERT INTO api_keys (key_hash, key_prefix, name, rate_limit_per_second, org_id)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, key_prefix, name, rate_limit_per_second, created_at, org_id
 `
 
 type CreateAPIKeyParams struct {
 	KeyHash            string      `json:"key_hash"`
 	KeyPrefix          string      `json:"key_prefix"`
-	Environment        string      `json:"environment"`
 	Name               pgtype.Text `json:"name"`
 	RateLimitPerSecond pgtype.Int4 `json:"rate_limit_per_second"`
 	OrgID              pgtype.Text `json:"org_id"`
@@ -29,7 +28,6 @@ type CreateAPIKeyParams struct {
 type CreateAPIKeyRow struct {
 	ID                 pgtype.UUID        `json:"id"`
 	KeyPrefix          string             `json:"key_prefix"`
-	Environment        string             `json:"environment"`
 	Name               pgtype.Text        `json:"name"`
 	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
@@ -40,7 +38,6 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Cre
 	row := q.db.QueryRow(ctx, createAPIKey,
 		arg.KeyHash,
 		arg.KeyPrefix,
-		arg.Environment,
 		arg.Name,
 		arg.RateLimitPerSecond,
 		arg.OrgID,
@@ -49,7 +46,6 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Cre
 	err := row.Scan(
 		&i.ID,
 		&i.KeyPrefix,
-		&i.Environment,
 		&i.Name,
 		&i.RateLimitPerSecond,
 		&i.CreatedAt,
@@ -59,7 +55,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Cre
 }
 
 const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
-SELECT id, key_prefix, environment, name, rate_limit_per_second, revoked_at, created_at, org_id
+SELECT id, key_prefix, name, rate_limit_per_second, revoked_at, created_at, org_id
 FROM api_keys
 WHERE key_hash = $1 AND revoked_at IS NULL
 `
@@ -67,7 +63,6 @@ WHERE key_hash = $1 AND revoked_at IS NULL
 type GetAPIKeyByHashRow struct {
 	ID                 pgtype.UUID        `json:"id"`
 	KeyPrefix          string             `json:"key_prefix"`
-	Environment        string             `json:"environment"`
 	Name               pgtype.Text        `json:"name"`
 	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
 	RevokedAt          pgtype.Timestamptz `json:"revoked_at"`
@@ -81,7 +76,6 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKe
 	err := row.Scan(
 		&i.ID,
 		&i.KeyPrefix,
-		&i.Environment,
 		&i.Name,
 		&i.RateLimitPerSecond,
 		&i.RevokedAt,
@@ -92,7 +86,7 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKe
 }
 
 const getAPIKeyByIdAndOrg = `-- name: GetAPIKeyByIdAndOrg :one
-SELECT id, key_prefix, environment, name, rate_limit_per_second, revoked_at, created_at, org_id
+SELECT id, key_prefix, name, rate_limit_per_second, revoked_at, created_at, org_id
 FROM api_keys
 WHERE id = $1 AND org_id = $2 AND revoked_at IS NULL
 `
@@ -105,7 +99,6 @@ type GetAPIKeyByIdAndOrgParams struct {
 type GetAPIKeyByIdAndOrgRow struct {
 	ID                 pgtype.UUID        `json:"id"`
 	KeyPrefix          string             `json:"key_prefix"`
-	Environment        string             `json:"environment"`
 	Name               pgtype.Text        `json:"name"`
 	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
 	RevokedAt          pgtype.Timestamptz `json:"revoked_at"`
@@ -119,7 +112,6 @@ func (q *Queries) GetAPIKeyByIdAndOrg(ctx context.Context, arg GetAPIKeyByIdAndO
 	err := row.Scan(
 		&i.ID,
 		&i.KeyPrefix,
-		&i.Environment,
 		&i.Name,
 		&i.RateLimitPerSecond,
 		&i.RevokedAt,
@@ -130,7 +122,7 @@ func (q *Queries) GetAPIKeyByIdAndOrg(ctx context.Context, arg GetAPIKeyByIdAndO
 }
 
 const listAPIKeys = `-- name: ListAPIKeys :many
-SELECT id, key_prefix, environment, name, rate_limit_per_second, created_at, last_used_at, revoked_at, org_id
+SELECT id, key_prefix, name, rate_limit_per_second, created_at, last_used_at, revoked_at, org_id
 FROM api_keys
 ORDER BY created_at DESC
 `
@@ -138,7 +130,6 @@ ORDER BY created_at DESC
 type ListAPIKeysRow struct {
 	ID                 pgtype.UUID        `json:"id"`
 	KeyPrefix          string             `json:"key_prefix"`
-	Environment        string             `json:"environment"`
 	Name               pgtype.Text        `json:"name"`
 	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
@@ -159,7 +150,6 @@ func (q *Queries) ListAPIKeys(ctx context.Context) ([]ListAPIKeysRow, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.KeyPrefix,
-			&i.Environment,
 			&i.Name,
 			&i.RateLimitPerSecond,
 			&i.CreatedAt,
@@ -179,7 +169,7 @@ func (q *Queries) ListAPIKeys(ctx context.Context) ([]ListAPIKeysRow, error) {
 
 const listAPIKeysByOrg = `-- name: ListAPIKeysByOrg :many
 
-SELECT id, key_prefix, environment, name, rate_limit_per_second, created_at, last_used_at, revoked_at
+SELECT id, key_prefix, name, rate_limit_per_second, created_at, last_used_at, revoked_at
 FROM api_keys
 WHERE org_id = $1
 ORDER BY created_at DESC
@@ -188,7 +178,6 @@ ORDER BY created_at DESC
 type ListAPIKeysByOrgRow struct {
 	ID                 pgtype.UUID        `json:"id"`
 	KeyPrefix          string             `json:"key_prefix"`
-	Environment        string             `json:"environment"`
 	Name               pgtype.Text        `json:"name"`
 	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
@@ -209,7 +198,6 @@ func (q *Queries) ListAPIKeysByOrg(ctx context.Context, orgID pgtype.Text) ([]Li
 		if err := rows.Scan(
 			&i.ID,
 			&i.KeyPrefix,
-			&i.Environment,
 			&i.Name,
 			&i.RateLimitPerSecond,
 			&i.CreatedAt,

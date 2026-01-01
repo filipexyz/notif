@@ -84,7 +84,7 @@ func (w *Worker) processMessage(ctx context.Context, msg jetstream.Msg) {
 
 	// Get enabled webhooks
 	// TODO: Cache webhooks and refresh periodically
-	webhooks, err := w.queries.GetEnabledWebhooks(ctx, "test") // TODO: Get environment from event
+	webhooks, err := w.queries.GetEnabledWebhooks(ctx)
 	if err != nil {
 		slog.Error("webhook: failed to get webhooks", "error", err)
 		msg.NakWithDelay(time.Minute)
