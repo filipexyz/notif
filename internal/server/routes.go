@@ -39,11 +39,20 @@ func (s *Server) routes() http.Handler {
 	dlqReader, _ := nats.NewDLQReader(s.nats.JetStream())
 	dlqHandler := handler.NewDLQHandler(dlqReader, publisher)
 
+	// Events handler
+	eventReader := nats.NewEventReader(s.nats.Stream())
+	eventsHandler := handler.NewEventsHandler(eventReader)
+
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware.Handler)
 
 		r.Post("/emit", emitHandler.Emit)
 		r.Get("/subscribe", subscribeHandler.Subscribe)
+
+		// Events query endpoints
+		r.Get("/events", eventsHandler.List)
+		r.Get("/events/stats", eventsHandler.Stats)
+		r.Get("/events/{seq}", eventsHandler.Get)
 
 		// DLQ endpoints
 		r.Get("/dlq", dlqHandler.List)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -772,6 +773,121 @@ func TestDeadLetterQueue(t *testing.T) {
 
 	t.Run("DLQ requires authorization", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", env.ServerURL+"/dlq", nil)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", resp.StatusCode)
+		}
+	})
+}
+
+func TestEventsReplayAPI(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer env.Cleanup(t)
+
+	t.Run("events list returns emitted events", func(t *testing.T) {
+		// Emit some events first
+		for i := 1; i <= 3; i++ {
+			payload := `{"topic": "replay-test.event", "data": {"num": ` + strconv.Itoa(i) + `}}`
+			req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+			resp, _ := http.DefaultClient.Do(req)
+			resp.Body.Close()
+		}
+
+		// Small delay for events to be stored
+		time.Sleep(100 * time.Millisecond)
+
+		// Query events
+		req, _ := http.NewRequest("GET", env.ServerURL+"/events?topic=replay-test.event", nil)
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		count := int(result["count"].(float64))
+		if count < 3 {
+			t.Errorf("expected at least 3 events, got %d", count)
+		}
+
+		events := result["events"].([]interface{})
+		if len(events) < 3 {
+			t.Errorf("expected at least 3 events in array, got %d", len(events))
+		}
+	})
+
+	t.Run("events list with limit", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", env.ServerURL+"/events?limit=2", nil)
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		events := result["events"].([]interface{})
+		if len(events) > 2 {
+			t.Errorf("expected max 2 events, got %d", len(events))
+		}
+	})
+
+	t.Run("events stats returns stream info", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", env.ServerURL+"/events/stats", nil)
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if _, ok := result["messages"]; !ok {
+			t.Error("expected messages field")
+		}
+		if _, ok := result["bytes"]; !ok {
+			t.Error("expected bytes field")
+		}
+		if _, ok := result["first_seq"]; !ok {
+			t.Error("expected first_seq field")
+		}
+		if _, ok := result["last_seq"]; !ok {
+			t.Error("expected last_seq field")
+		}
+	})
+
+	t.Run("events requires authorization", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", env.ServerURL+"/events", nil)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
