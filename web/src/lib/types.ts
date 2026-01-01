@@ -68,3 +68,18 @@ export type Stats = {
   webhooks_active: number
   dlq_count: number
 }
+
+// Webhook Delivery
+export type WebhookDelivery = {
+  id: string
+  webhook_id: string
+  event_id: string
+  topic: string
+  status: 'pending' | 'success' | 'failed'
+  attempt: number
+  response_status?: number
+  response_body?: string
+  error?: string
+  created_at: string
+  delivered_at?: string
+}

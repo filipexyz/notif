@@ -277,9 +277,35 @@ func (h *WebhookHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Format deliveries for JSON response
+	results := make([]map[string]any, len(deliveries))
+	for i, d := range deliveries {
+		results[i] = map[string]any{
+			"id":         uuid.UUID(d.ID.Bytes).String(),
+			"webhook_id": uuid.UUID(d.WebhookID.Bytes).String(),
+			"event_id":   d.EventID,
+			"topic":      d.Topic,
+			"status":     d.Status,
+			"attempt":    d.Attempt,
+			"created_at": d.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
+		}
+		if d.ResponseStatus.Valid {
+			results[i]["response_status"] = d.ResponseStatus.Int32
+		}
+		if d.ResponseBody.Valid {
+			results[i]["response_body"] = d.ResponseBody.String
+		}
+		if d.Error.Valid {
+			results[i]["error"] = d.Error.String
+		}
+		if d.DeliveredAt.Valid {
+			results[i]["delivered_at"] = d.DeliveredAt.Time.Format("2006-01-02T15:04:05Z")
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"deliveries": deliveries,
-		"count":      len(deliveries),
+		"deliveries": results,
+		"count":      len(results),
 	})
 }
 

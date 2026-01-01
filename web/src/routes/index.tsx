@@ -1,10 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Send } from 'lucide-react'
 import { EventRow } from '../components/events/EventRow'
 import { EventDetail } from '../components/events/EventDetail'
 import { LiveIndicator } from '../components/events/LiveIndicator'
 import { SlideOver } from '../components/layout/SlideOver'
+import { Button } from '../components/ui'
 import { useApi } from '../lib/api'
 import { useEventStream } from '../lib/websocket'
 import type { StoredEvent } from '../lib/types'
@@ -33,8 +35,32 @@ export const Route = createFileRoute('/')({
 function EventsPage() {
   const [selectedEvent, setSelectedEvent] = useState<UIEvent | null>(null)
   const [liveEvents, setLiveEvents] = useState<UIEvent[]>([])
+  const [showEmitModal, setShowEmitModal] = useState(false)
+  const [emitTopic, setEmitTopic] = useState('test.event')
+  const [emitData, setEmitData] = useState('{\n  "message": "Hello world"\n}')
   const api = useApi()
   const queryClient = useQueryClient()
+
+  const emitMutation = useMutation({
+    mutationFn: (payload: { topic: string; data: unknown }) =>
+      api<{ id: string }>('/api/v1/emit', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      setShowEmitModal(false)
+      queryClient.invalidateQueries({ queryKey: ['events'] })
+    },
+  })
+
+  const handleEmit = () => {
+    try {
+      const data = JSON.parse(emitData)
+      emitMutation.mutate({ topic: emitTopic, data })
+    } catch {
+      alert('Invalid JSON')
+    }
+  }
 
   const { data: eventsResponse, isLoading, error } = useQuery({
     queryKey: ['events'],
@@ -97,7 +123,13 @@ function EventsPage() {
             <option>Last 7 days</option>
           </select>
         </div>
-        <LiveIndicator connected={isConnected} onClick={toggleLive} />
+        <div className="flex items-center gap-3">
+          <Button size="sm" onClick={() => setShowEmitModal(true)}>
+            <Send className="w-3.5 h-3.5 mr-1.5" />
+            Send Event
+          </Button>
+          <LiveIndicator connected={isConnected} onClick={toggleLive} />
+        </div>
       </div>
 
       {/* Loading state */}
@@ -148,6 +180,61 @@ function EventsPage() {
       >
         {selectedEvent && <EventDetail event={selectedEvent} />}
       </SlideOver>
+
+      {/* Emit modal */}
+      {showEmitModal && (
+        <>
+          <div
+            className="fixed inset-0 bg-neutral-900/20 z-40"
+            onClick={() => setShowEmitModal(false)}
+          />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white border border-neutral-200 p-6 z-50">
+            <h3 className="text-lg font-medium text-neutral-900 mb-4">Send Event</h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
+                  Topic
+                </label>
+                <input
+                  type="text"
+                  value={emitTopic}
+                  onChange={(e) => setEmitTopic(e.target.value)}
+                  placeholder="orders.created"
+                  className="w-full px-3 py-2 text-sm border border-neutral-200 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
+                  Data (JSON)
+                </label>
+                <textarea
+                  value={emitData}
+                  onChange={(e) => setEmitData(e.target.value)}
+                  rows={6}
+                  className="w-full px-3 py-2 text-sm border border-neutral-200 font-mono"
+                />
+              </div>
+
+              {emitMutation.error && (
+                <div className="text-sm text-error">
+                  {emitMutation.error.message}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <Button onClick={handleEmit} disabled={emitMutation.isPending}>
+                  {emitMutation.isPending ? 'Sending...' : 'Send'}
+                </Button>
+                <Button variant="secondary" onClick={() => setShowEmitModal(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

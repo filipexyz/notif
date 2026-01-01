@@ -1,14 +1,29 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2 } from 'lucide-react'
+import { Trash2, RotateCcw, Copy, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { Button, Input, Badge } from '../../components/ui'
 import { useApi } from '../../lib/api'
-import type { Webhook, UpdateWebhookRequest } from '../../lib/types'
+import type { Webhook, UpdateWebhookRequest, WebhookDelivery } from '../../lib/types'
 
 export const Route = createFileRoute('/webhooks/$id')({
   component: EditWebhookPage,
 })
+
+function formatTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+function StatusIcon({ status }: { status: string }) {
+  if (status === 'success') return <CheckCircle className="w-4 h-4 text-success" />
+  if (status === 'failed') return <XCircle className="w-4 h-4 text-error" />
+  return <Clock className="w-4 h-4 text-neutral-400" />
+}
 
 function EditWebhookPage() {
   const { id } = Route.useParams()
@@ -20,6 +35,13 @@ function EditWebhookPage() {
     queryKey: ['webhooks', id],
     queryFn: () => api<Webhook>(`/api/v1/webhooks/${id}`),
   })
+
+  const { data: deliveriesResponse } = useQuery({
+    queryKey: ['webhooks', id, 'deliveries'],
+    queryFn: () => api<{ deliveries: WebhookDelivery[]; count: number }>(`/api/v1/webhooks/${id}/deliveries`),
+    enabled: !!webhook,
+  })
+  const deliveries = deliveriesResponse?.deliveries ?? []
 
   const [url, setUrl] = useState('')
   const [topics, setTopics] = useState('')
@@ -154,6 +176,50 @@ function EditWebhookPage() {
           </Button>
         </div>
       </form>
+
+      {/* Deliveries */}
+      <div className="mt-8">
+        <h2 className="text-lg font-medium text-neutral-900 mb-4">Recent Deliveries</h2>
+
+        {deliveries.length === 0 ? (
+          <div className="py-8 text-center text-neutral-500 border border-neutral-200 bg-white">
+            No deliveries yet
+          </div>
+        ) : (
+          <div className="border border-neutral-200 bg-white divide-y divide-neutral-100">
+            {deliveries.map((delivery) => (
+              <div key={delivery.id} className="px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <StatusIcon status={delivery.status} />
+                  <div>
+                    <div className="text-sm font-medium text-neutral-700">
+                      {delivery.topic}
+                    </div>
+                    <div className="text-xs text-neutral-500">
+                      {formatTime(delivery.created_at)}
+                      {delivery.response_status && (
+                        <span className="ml-2">HTTP {delivery.response_status}</span>
+                      )}
+                      {delivery.error && (
+                        <span className="ml-2 text-error">{delivery.error}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => navigator.clipboard.writeText(delivery.event_id)}
+                    className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100"
+                    title="Copy event ID"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
