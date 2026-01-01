@@ -41,7 +41,7 @@ All `/api/v1/*` endpoints accept:
 - API key: `Authorization: Bearer nsh_xxx`
 - Clerk JWT: Session cookie or `Authorization: Bearer <jwt>`
 
-API key format: `nsh_` + 20 alphanumeric chars (regex: `^nsh_[a-zA-Z0-9]{20}$`)
+API key format: `nsh_` + 28 alphanumeric chars (regex: `^nsh_[a-zA-Z0-9]{28}$`)
 
 ### Endpoints
 

@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	DefaultServer  = "http://localhost:8080"
+	DefaultServer  = "https://api.notif.sh"
 	DefaultTimeout = 30 * time.Second
 )
 

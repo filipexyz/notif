@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var apiKeyRegex = regexp.MustCompile(`^nsh_[a-zA-Z0-9]{20}$`)
+var apiKeyRegex = regexp.MustCompile(`^nsh_[a-zA-Z0-9]{28}$`)
 
 var authCmd = &cobra.Command{
 	Use:   "auth <api-key>",
@@ -19,7 +19,7 @@ var authCmd = &cobra.Command{
 
 		// Validate format
 		if !apiKeyRegex.MatchString(apiKey) {
-			out.Error("Invalid API key format. Expected: nsh_<20 chars>")
+			out.Error("Invalid API key format. Expected: nsh_<28 chars>")
 			return
 		}
 
