@@ -1,4 +1,4 @@
-.PHONY: build build-cli run test generate dev dev-down clean seed
+.PHONY: build build-cli run test generate dev dev-down clean seed migrate migrate-down migrate-status
 
 # Build the server binary
 build:
@@ -58,6 +58,16 @@ dev-down:
 clean:
 	rm -rf bin/
 	docker compose down -v
+
+# Run database migrations (requires: go install github.com/pressly/goose/v3/cmd/goose@latest)
+migrate:
+	goose -dir db/migrations postgres "postgres://notif:notif_dev@localhost:5432/notif?sslmode=disable" up
+
+migrate-down:
+	goose -dir db/migrations postgres "postgres://notif:notif_dev@localhost:5432/notif?sslmode=disable" down
+
+migrate-status:
+	goose -dir db/migrations postgres "postgres://notif:notif_dev@localhost:5432/notif?sslmode=disable" status
 
 # Seed test data
 seed:

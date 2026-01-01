@@ -1,3 +1,4 @@
+-- +goose Up
 -- Webhooks
 CREATE TABLE webhooks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -33,3 +34,7 @@ CREATE INDEX idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id)
 CREATE INDEX idx_webhook_deliveries_event_id ON webhook_deliveries(event_id);
 CREATE INDEX idx_webhook_deliveries_status ON webhook_deliveries(status) WHERE status = 'pending';
 CREATE INDEX idx_webhook_deliveries_created_at ON webhook_deliveries(created_at);
+
+-- +goose Down
+DROP TABLE IF EXISTS webhook_deliveries;
+DROP TABLE IF EXISTS webhooks;

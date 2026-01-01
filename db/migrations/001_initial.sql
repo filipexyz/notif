@@ -1,3 +1,4 @@
+-- +goose Up
 -- API Keys
 CREATE TABLE api_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -37,3 +38,8 @@ CREATE TABLE consumer_groups (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(name, api_key_id)
 );
+
+-- +goose Down
+DROP TABLE IF EXISTS consumer_groups;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS api_keys;

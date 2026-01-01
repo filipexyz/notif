@@ -211,12 +211,37 @@ func runMigrations(ctx context.Context, db *pgxpool.Pool) error {
 			return fmt.Errorf("failed to read migration %s: %w", file, err)
 		}
 
-		if _, err := db.Exec(ctx, string(content)); err != nil {
+		// Extract only the Up section (between "-- +goose Up" and "-- +goose Down")
+		sql := extractGooseUp(string(content))
+
+		if _, err := db.Exec(ctx, sql); err != nil {
 			return fmt.Errorf("failed to execute migration %s: %w", file, err)
 		}
 	}
 
 	return nil
+}
+
+// extractGooseUp extracts the SQL between "-- +goose Up" and "-- +goose Down"
+func extractGooseUp(content string) string {
+	upMarker := "-- +goose Up"
+	downMarker := "-- +goose Down"
+
+	upIdx := strings.Index(content, upMarker)
+	if upIdx == -1 {
+		return content // No goose markers, return as-is
+	}
+
+	// Start after the Up marker
+	start := upIdx + len(upMarker)
+
+	// Find Down marker
+	downIdx := strings.Index(content[start:], downMarker)
+	if downIdx == -1 {
+		return content[start:] // No Down section
+	}
+
+	return content[start : start+downIdx]
 }
 
 func seedTestAPIKey(ctx context.Context, db *pgxpool.Pool) error {
