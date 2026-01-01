@@ -7,6 +7,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -183,66 +187,36 @@ func (e *TestEnv) Cleanup(t *testing.T) {
 }
 
 func runMigrations(ctx context.Context, db *pgxpool.Pool) error {
-	migration := `
-		CREATE TABLE IF NOT EXISTS api_keys (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			key_hash VARCHAR(64) NOT NULL UNIQUE,
-			key_prefix VARCHAR(32) NOT NULL,
-			environment VARCHAR(10) NOT NULL CHECK (environment IN ('live', 'test')),
-			name VARCHAR(255),
-			rate_limit_per_second INT DEFAULT 100,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			last_used_at TIMESTAMPTZ,
-			revoked_at TIMESTAMPTZ,
-			org_id VARCHAR(64)
-		);
+	// Find migrations directory (relative to test file location)
+	migrationsDir := filepath.Join("..", "..", "db", "migrations")
 
-		CREATE TABLE IF NOT EXISTS events (
-			id VARCHAR(32) PRIMARY KEY,
-			topic VARCHAR(255) NOT NULL,
-			api_key_id UUID REFERENCES api_keys(id),
-			environment VARCHAR(10) NOT NULL,
-			payload_size INT NOT NULL,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
+	entries, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		return fmt.Errorf("failed to read migrations directory: %w", err)
+	}
 
-		CREATE TABLE IF NOT EXISTS consumer_groups (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			name VARCHAR(255) NOT NULL,
-			api_key_id UUID REFERENCES api_keys(id),
-			environment VARCHAR(10) NOT NULL,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			UNIQUE(name, api_key_id)
-		);
+	// Filter and sort SQL files
+	var migrationFiles []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
+			migrationFiles = append(migrationFiles, entry.Name())
+		}
+	}
+	sort.Strings(migrationFiles)
 
-		CREATE TABLE IF NOT EXISTS webhooks (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			api_key_id UUID NOT NULL REFERENCES api_keys(id),
-			url VARCHAR(2048) NOT NULL,
-			topics TEXT[] NOT NULL,
-			secret VARCHAR(64) NOT NULL,
-			enabled BOOLEAN NOT NULL DEFAULT true,
-			environment VARCHAR(10) NOT NULL CHECK (environment IN ('live', 'test')),
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
+	// Execute each migration in order
+	for _, file := range migrationFiles {
+		content, err := os.ReadFile(filepath.Join(migrationsDir, file))
+		if err != nil {
+			return fmt.Errorf("failed to read migration %s: %w", file, err)
+		}
 
-		CREATE TABLE IF NOT EXISTS webhook_deliveries (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			webhook_id UUID NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
-			event_id VARCHAR(32) NOT NULL,
-			topic VARCHAR(255) NOT NULL,
-			status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'success', 'failed')),
-			attempt INT NOT NULL DEFAULT 1,
-			response_status INT,
-			response_body TEXT,
-			error TEXT,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			delivered_at TIMESTAMPTZ
-		);
-	`
-	_, err := db.Exec(ctx, migration)
-	return err
+		if _, err := db.Exec(ctx, string(content)); err != nil {
+			return fmt.Errorf("failed to execute migration %s: %w", file, err)
+		}
+	}
+
+	return nil
 }
 
 func seedTestAPIKey(ctx context.Context, db *pgxpool.Pool) error {
