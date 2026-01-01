@@ -44,7 +44,9 @@ jobs:
           if [ "${{ matrix.os }}" = "windows" ]; then
             EXT=".exe"
           fi
-          go build -ldflags="-s -w" -o notif-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/notif
+          VERSION=${GITHUB_REF#refs/tags/v}
+          COMMIT=${GITHUB_SHA::8}
+          go build -ldflags="-s -w -X github.com/filipexyz/notif/internal/cli/cmd.Version=${VERSION} -X github.com/filipexyz/notif/internal/cli/cmd.Commit=${COMMIT}" -o notif-${{ matrix.os }}-${{ matrix.arch }}${EXT} ./cmd/notif
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
