@@ -36,3 +36,29 @@ type Event struct {
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
+
+type Webhook struct {
+	ID          pgtype.UUID        `json:"id"`
+	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
+	Url         string             `json:"url"`
+	Topics      []string           `json:"topics"`
+	Secret      string             `json:"secret"`
+	Enabled     bool               `json:"enabled"`
+	Environment string             `json:"environment"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type WebhookDelivery struct {
+	ID             pgtype.UUID        `json:"id"`
+	WebhookID      pgtype.UUID        `json:"webhook_id"`
+	EventID        string             `json:"event_id"`
+	Topic          string             `json:"topic"`
+	Status         string             `json:"status"`
+	Attempt        int32              `json:"attempt"`
+	ResponseStatus pgtype.Int4        `json:"response_status"`
+	ResponseBody   pgtype.Text        `json:"response_body"`
+	Error          pgtype.Text        `json:"error"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	DeliveredAt    pgtype.Timestamptz `json:"delivered_at"`
+}

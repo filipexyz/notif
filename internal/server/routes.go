@@ -43,6 +43,9 @@ func (s *Server) routes() http.Handler {
 	eventReader := nats.NewEventReader(s.nats.Stream())
 	eventsHandler := handler.NewEventsHandler(eventReader)
 
+	// Webhook handler
+	webhookHandler := handler.NewWebhookHandler(queries)
+
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware.Handler)
 
@@ -53,6 +56,14 @@ func (s *Server) routes() http.Handler {
 		r.Get("/events", eventsHandler.List)
 		r.Get("/events/stats", eventsHandler.Stats)
 		r.Get("/events/{seq}", eventsHandler.Get)
+
+		// Webhook endpoints
+		r.Post("/webhooks", webhookHandler.Create)
+		r.Get("/webhooks", webhookHandler.List)
+		r.Get("/webhooks/{id}", webhookHandler.Get)
+		r.Put("/webhooks/{id}", webhookHandler.Update)
+		r.Delete("/webhooks/{id}", webhookHandler.Delete)
+		r.Get("/webhooks/{id}/deliveries", webhookHandler.Deliveries)
 
 		// DLQ endpoints
 		r.Get("/dlq", dlqHandler.List)

@@ -213,6 +213,32 @@ func runMigrations(ctx context.Context, db *pgxpool.Pool) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE(name, api_key_id)
 		);
+
+		CREATE TABLE IF NOT EXISTS webhooks (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			api_key_id UUID NOT NULL REFERENCES api_keys(id),
+			url VARCHAR(2048) NOT NULL,
+			topics TEXT[] NOT NULL,
+			secret VARCHAR(64) NOT NULL,
+			enabled BOOLEAN NOT NULL DEFAULT true,
+			environment VARCHAR(10) NOT NULL CHECK (environment IN ('live', 'test')),
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS webhook_deliveries (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			webhook_id UUID NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+			event_id VARCHAR(32) NOT NULL,
+			topic VARCHAR(255) NOT NULL,
+			status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'success', 'failed')),
+			attempt INT NOT NULL DEFAULT 1,
+			response_status INT,
+			response_body TEXT,
+			error TEXT,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			delivered_at TIMESTAMPTZ
+		);
 	`
 	_, err := db.Exec(ctx, migration)
 	return err

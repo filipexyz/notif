@@ -955,3 +955,335 @@ func TestWildcardSubscription(t *testing.T) {
 		}
 	})
 }
+
+func TestWebhooksCRUD(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer env.Cleanup(t)
+
+	var createdWebhookID string
+	var webhookSecret string
+
+	t.Run("create webhook", func(t *testing.T) {
+		payload := `{"url": "https://example.com/webhook", "topics": ["orders.*", "payments.completed"]}`
+		req, _ := http.NewRequest("POST", env.ServerURL+"/webhooks", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected status 201, got %d: %s", resp.StatusCode, body)
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if result["id"] == nil || result["id"] == "" {
+			t.Error("expected webhook id")
+		}
+		createdWebhookID = result["id"].(string)
+
+		if result["url"] != "https://example.com/webhook" {
+			t.Errorf("expected url https://example.com/webhook, got %v", result["url"])
+		}
+
+		topics := result["topics"].([]interface{})
+		if len(topics) != 2 {
+			t.Errorf("expected 2 topics, got %d", len(topics))
+		}
+
+		if result["secret"] == nil || result["secret"] == "" {
+			t.Error("expected secret in response")
+		}
+		webhookSecret = result["secret"].(string)
+
+		if result["enabled"] != true {
+			t.Error("expected webhook to be enabled by default")
+		}
+
+		if result["environment"] != "test" {
+			t.Errorf("expected environment test, got %v", result["environment"])
+		}
+	})
+
+	t.Run("list webhooks", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks", nil)
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		count := int(result["count"].(float64))
+		if count < 1 {
+			t.Errorf("expected at least 1 webhook, got %d", count)
+		}
+
+		webhooks := result["webhooks"].([]interface{})
+		if len(webhooks) < 1 {
+			t.Error("expected at least 1 webhook in list")
+		}
+
+		// Verify secret is NOT included in list response
+		wh := webhooks[0].(map[string]interface{})
+		if wh["secret"] != nil && wh["secret"] != "" {
+			t.Error("secret should not be included in list response")
+		}
+	})
+
+	t.Run("get webhook by id", func(t *testing.T) {
+		if createdWebhookID == "" {
+			t.Skip("no webhook created")
+		}
+
+		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks/"+createdWebhookID, nil)
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if result["id"] != createdWebhookID {
+			t.Errorf("expected id %s, got %v", createdWebhookID, result["id"])
+		}
+
+		// Secret should NOT be included in get response
+		if result["secret"] != nil && result["secret"] != "" {
+			t.Error("secret should not be included in get response")
+		}
+	})
+
+	t.Run("update webhook - disable", func(t *testing.T) {
+		if createdWebhookID == "" {
+			t.Skip("no webhook created")
+		}
+
+		payload := `{"enabled": false}`
+		req, _ := http.NewRequest("PUT", env.ServerURL+"/webhooks/"+createdWebhookID, strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, body)
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if result["enabled"] != false {
+			t.Error("expected webhook to be disabled")
+		}
+	})
+
+	t.Run("update webhook - change url and topics", func(t *testing.T) {
+		if createdWebhookID == "" {
+			t.Skip("no webhook created")
+		}
+
+		payload := `{"url": "https://newsite.com/events", "topics": ["users.*"], "enabled": true}`
+		req, _ := http.NewRequest("PUT", env.ServerURL+"/webhooks/"+createdWebhookID, strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if result["url"] != "https://newsite.com/events" {
+			t.Errorf("expected url https://newsite.com/events, got %v", result["url"])
+		}
+
+		topics := result["topics"].([]interface{})
+		if len(topics) != 1 || topics[0] != "users.*" {
+			t.Errorf("expected topics [users.*], got %v", topics)
+		}
+
+		if result["enabled"] != true {
+			t.Error("expected webhook to be enabled")
+		}
+	})
+
+	t.Run("get webhook deliveries", func(t *testing.T) {
+		if createdWebhookID == "" {
+			t.Skip("no webhook created")
+		}
+
+		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks/"+createdWebhookID+"/deliveries", nil)
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if _, ok := result["deliveries"]; !ok {
+			t.Error("expected deliveries field")
+		}
+		if _, ok := result["count"]; !ok {
+			t.Error("expected count field")
+		}
+	})
+
+	t.Run("delete webhook", func(t *testing.T) {
+		if createdWebhookID == "" {
+			t.Skip("no webhook created")
+		}
+
+		req, _ := http.NewRequest("DELETE", env.ServerURL+"/webhooks/"+createdWebhookID, nil)
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		// Verify it's deleted
+		req2, _ := http.NewRequest("GET", env.ServerURL+"/webhooks/"+createdWebhookID, nil)
+		req2.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp2, _ := http.DefaultClient.Do(req2)
+		defer resp2.Body.Close()
+
+		if resp2.StatusCode != http.StatusNotFound {
+			t.Errorf("expected status 404 after delete, got %d", resp2.StatusCode)
+		}
+	})
+
+	// Use webhookSecret to prevent unused variable warning
+	_ = webhookSecret
+}
+
+func TestWebhooksValidation(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer env.Cleanup(t)
+
+	t.Run("create webhook requires url", func(t *testing.T) {
+		payload := `{"topics": ["orders.*"]}`
+		req, _ := http.NewRequest("POST", env.ServerURL+"/webhooks", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("create webhook requires topics", func(t *testing.T) {
+		payload := `{"url": "https://example.com/webhook"}`
+		req, _ := http.NewRequest("POST", env.ServerURL+"/webhooks", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("webhook requires authorization", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks", nil)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("get non-existent webhook returns 404", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks/00000000-0000-0000-0000-000000000000", nil)
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected status 404, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("invalid webhook id returns 400", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks/invalid-uuid", nil)
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d", resp.StatusCode)
+		}
+	})
+}
