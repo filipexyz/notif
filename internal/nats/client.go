@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	StreamName    = "NOTIF_EVENTS"
-	DLQStreamName = "NOTIF_DLQ"
+	StreamName         = "NOTIF_EVENTS"
+	DLQStreamName      = "NOTIF_DLQ"
+	WebhookRetryStream = "NOTIF_WEBHOOK_RETRY"
 )
 
 // Client wraps NATS connection and JetStream.
@@ -85,6 +86,21 @@ func (c *Client) EnsureStreams(ctx context.Context) error {
 		return fmt.Errorf("create DLQ stream: %w", err)
 	}
 	slog.Info("JetStream stream ready", "name", DLQStreamName)
+
+	// Webhook retry stream
+	_, err = c.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+		Name:        WebhookRetryStream,
+		Description: "notif.sh webhook retry queue",
+		Subjects:    []string{"webhook-retry.>"},
+		Storage:     jetstream.FileStorage,
+		Retention:   jetstream.WorkQueuePolicy,
+		MaxAge:      24 * time.Hour,
+		Replicas:    1,
+	})
+	if err != nil {
+		return fmt.Errorf("create webhook retry stream: %w", err)
+	}
+	slog.Info("JetStream stream ready", "name", WebhookRetryStream)
 
 	return nil
 }

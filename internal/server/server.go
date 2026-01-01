@@ -65,7 +65,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
 	s.webhookCancel = webhookCancel
 
 	queries := db.New(s.db)
-	worker := webhook.NewWorker(queries, nc.Stream())
+	dlqPublisher := nats.NewDLQPublisher(nc.JetStream())
+	worker := webhook.NewWorker(queries, nc.Stream(), nc.JetStream(), dlqPublisher)
 	go func() {
 		if err := worker.Start(webhookCtx); err != nil && webhookCtx.Err() == nil {
 			slog.Error("webhook worker error", "error", err)

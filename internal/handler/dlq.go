@@ -50,9 +50,23 @@ func (h *DLQHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Flatten response for frontend
+	messages := make([]map[string]any, len(entries))
+	for i, entry := range entries {
+		messages[i] = map[string]any{
+			"seq":        entry.Seq,
+			"topic":      entry.Message.OriginalTopic,
+			"error":      entry.Message.LastError,
+			"attempts":   entry.Message.Attempts,
+			"created_at": entry.Message.FailedAt,
+			"event_id":   entry.Message.ID,
+			"data":       entry.Message.Data,
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"messages": entries,
-		"count":    len(entries),
+		"messages": messages,
+		"count":    len(messages),
 	})
 }
 
