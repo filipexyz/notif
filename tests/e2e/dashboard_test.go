@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestDashboardAuthRequired verifies dashboard routes require Clerk authentication.
+// TestDashboardAuthRequired verifies API key management routes require Clerk authentication.
 // Note: Full Clerk JWT testing requires integration with Clerk's test environment.
 // These tests verify that routes properly reject unauthenticated requests.
 func TestDashboardAuthRequired(t *testing.T) {
@@ -24,21 +24,21 @@ func TestDashboardAuthRequired(t *testing.T) {
 		{
 			name:       "create api key requires auth",
 			method:     "POST",
-			path:       "/dashboard/api-keys",
-			body:       map[string]string{"name": "test", "environment": "test"},
-			wantStatus: http.StatusForbidden, // Clerk returns 403 for missing/invalid auth
+			path:       "/api/v1/api-keys",
+			body:       map[string]string{"name": "test"},
+			wantStatus: http.StatusUnauthorized, // No auth provided
 		},
 		{
 			name:       "list api keys requires auth",
 			method:     "GET",
-			path:       "/dashboard/api-keys",
-			wantStatus: http.StatusForbidden,
+			path:       "/api/v1/api-keys",
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name:       "revoke api key requires auth",
 			method:     "DELETE",
-			path:       "/dashboard/api-keys/00000000-0000-0000-0000-000000000000",
-			wantStatus: http.StatusForbidden,
+			path:       "/api/v1/api-keys/00000000-0000-0000-0000-000000000000",
+			wantStatus: http.StatusUnauthorized,
 		},
 	}
 
@@ -72,9 +72,9 @@ func TestDashboardAuthRequired(t *testing.T) {
 	}
 }
 
-// TestDashboardRejectsAPIKeyAuth verifies that dashboard routes don't accept
-// API key authentication (they require Clerk JWT).
-func TestDashboardRejectsAPIKeyAuth(t *testing.T) {
+// TestAPIKeyManagementRejectsAPIKeyAuth verifies that API key management routes
+// don't accept API key authentication (they require Clerk JWT).
+func TestAPIKeyManagementRejectsAPIKeyAuth(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer env.Cleanup(t)
 
@@ -83,15 +83,15 @@ func TestDashboardRejectsAPIKeyAuth(t *testing.T) {
 		method string
 		path   string
 	}{
-		{"create with api key", "POST", "/dashboard/api-keys"},
-		{"list with api key", "GET", "/dashboard/api-keys"},
+		{"create with api key", "POST", "/api/v1/api-keys"},
+		{"list with api key", "GET", "/api/v1/api-keys"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var body []byte
 			if tt.method == "POST" {
-				body, _ = json.Marshal(map[string]string{"name": "test", "environment": "test"})
+				body, _ = json.Marshal(map[string]string{"name": "test"})
 			}
 
 			req, err := http.NewRequest(tt.method, env.ServerURL+tt.path, bytes.NewReader(body))
@@ -99,7 +99,7 @@ func TestDashboardRejectsAPIKeyAuth(t *testing.T) {
 				t.Fatalf("failed to create request: %v", err)
 			}
 
-			// Try using API key auth (should be rejected)
+			// Try using API key auth (should be rejected - requires Clerk auth)
 			req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 			req.Header.Set("Content-Type", "application/json")
 
@@ -109,9 +109,9 @@ func TestDashboardRejectsAPIKeyAuth(t *testing.T) {
 			}
 			defer resp.Body.Close()
 
-			// Dashboard should reject API key auth (Clerk returns 403)
+			// API key management should reject API key auth (returns 403)
 			if resp.StatusCode != http.StatusForbidden {
-				t.Errorf("got status %d, want %d (dashboard should reject API key auth)", resp.StatusCode, http.StatusForbidden)
+				t.Errorf("got status %d, want %d (api-keys should reject API key auth)", resp.StatusCode, http.StatusForbidden)
 			}
 		})
 	}

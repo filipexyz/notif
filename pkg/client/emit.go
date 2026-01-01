@@ -32,7 +32,7 @@ func (c *Client) Emit(topic string, data json.RawMessage) (*EmitResponse, error)
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequest("POST", c.server+"/emit", bytes.NewReader(body))
+	httpReq, err := http.NewRequest("POST", c.server+"/api/v1/emit", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

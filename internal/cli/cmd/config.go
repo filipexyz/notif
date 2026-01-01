@@ -21,10 +21,9 @@ var configShowCmd = &cobra.Command{
 
 		if jsonOutput {
 			out.JSON(map[string]any{
-				"path":        path,
-				"api_key":     maskAPIKey(cfg.APIKey),
-				"server":      serverURL,
-				"environment": cfg.Environment,
+				"path":    path,
+				"api_key": maskAPIKey(cfg.APIKey),
+				"server":  serverURL,
 			})
 			return
 		}
@@ -33,7 +32,6 @@ var configShowCmd = &cobra.Command{
 		out.KeyValue("Path", path)
 		out.KeyValue("API Key", maskAPIKey(cfg.APIKey))
 		out.KeyValue("Server", serverURL)
-		out.KeyValue("Environment", cfg.Environment)
 	},
 }
 

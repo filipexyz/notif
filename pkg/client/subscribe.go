@@ -40,7 +40,7 @@ func (c *Client) Subscribe(ctx context.Context, topics []string, opts SubscribeO
 	// Convert HTTP URL to WebSocket URL
 	wsURL := strings.Replace(c.server, "http://", "ws://", 1)
 	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
-	wsURL += "/subscribe"
+	wsURL += "/ws"
 
 	// Set up headers with auth
 	header := http.Header{}

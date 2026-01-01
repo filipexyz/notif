@@ -37,7 +37,7 @@ type EventsQueryOptions struct {
 
 // EventsList queries historical events.
 func (c *Client) EventsList(opts EventsQueryOptions) (*EventsListResponse, error) {
-	u, _ := url.Parse(c.server + "/events")
+	u, _ := url.Parse(c.server + "/api/v1/events")
 	q := u.Query()
 
 	if opts.Topic != "" {
@@ -84,7 +84,7 @@ func (c *Client) EventsList(opts EventsQueryOptions) (*EventsListResponse, error
 
 // EventsGet retrieves a specific event by sequence number.
 func (c *Client) EventsGet(seq uint64) (*StoredEvent, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/events/%d", c.server, seq), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/events/%d", c.server, seq), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ type EventsStatsResponse struct {
 
 // EventsStats returns stream statistics.
 func (c *Client) EventsStats() (*EventsStatsResponse, error) {
-	req, err := http.NewRequest("GET", c.server+"/events/stats", nil)
+	req, err := http.NewRequest("GET", c.server+"/api/v1/events/stats", nil)
 	if err != nil {
 		return nil, err
 	}

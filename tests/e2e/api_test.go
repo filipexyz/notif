@@ -81,7 +81,7 @@ func TestEmitEndpoint(t *testing.T) {
 
 	t.Run("emit requires authorization", func(t *testing.T) {
 		payload := `{"topic": "test.hello", "data": {"msg": "hello"}}`
-		resp, err := http.Post(env.ServerURL+"/emit", "application/json", strings.NewReader(payload))
+		resp, err := http.Post(env.ServerURL+"/api/v1/emit", "application/json", strings.NewReader(payload))
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
@@ -94,9 +94,9 @@ func TestEmitEndpoint(t *testing.T) {
 
 	t.Run("emit with invalid key returns unauthorized", func(t *testing.T) {
 		payload := `{"topic": "test.hello", "data": {"msg": "hello"}}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer nsh_test_invalidkey12345678901")
+		req.Header.Set("Authorization", "Bearer nsh_invalidkey123456789")
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -111,7 +111,7 @@ func TestEmitEndpoint(t *testing.T) {
 
 	t.Run("emit with valid key succeeds", func(t *testing.T) {
 		payload := `{"topic": "test.hello", "data": {"msg": "hello world"}}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -150,7 +150,7 @@ func TestEmitEndpoint(t *testing.T) {
 
 	t.Run("emit with empty topic fails", func(t *testing.T) {
 		payload := `{"topic": "", "data": {"msg": "hello"}}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -167,7 +167,7 @@ func TestEmitEndpoint(t *testing.T) {
 
 	t.Run("emit with $ prefix topic fails", func(t *testing.T) {
 		payload := `{"topic": "$internal.topic", "data": {"msg": "hello"}}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -186,7 +186,7 @@ func TestEmitEndpoint(t *testing.T) {
 		// Create payload larger than 64KB
 		largeData := strings.Repeat("x", 70*1024)
 		payload := `{"topic": "test.large", "data": {"msg": "` + largeData + `"}}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -209,7 +209,7 @@ func TestWebSocketSubscribe(t *testing.T) {
 	wsURL := strings.Replace(env.ServerURL, "http://", "ws://", 1)
 
 	t.Run("subscribe requires authorization", func(t *testing.T) {
-		_, resp, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe", nil)
+		_, resp, err := websocket.DefaultDialer.Dial(wsURL+"/ws", nil)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -219,7 +219,7 @@ func TestWebSocketSubscribe(t *testing.T) {
 	})
 
 	t.Run("subscribe with valid token succeeds", func(t *testing.T) {
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
@@ -250,7 +250,7 @@ func TestWebSocketSubscribe(t *testing.T) {
 	})
 
 	t.Run("ping pong works", func(t *testing.T) {
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
@@ -283,7 +283,7 @@ func TestEmitAndReceive(t *testing.T) {
 
 	t.Run("emit event is received by subscriber", func(t *testing.T) {
 		// Connect WebSocket
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
@@ -320,7 +320,7 @@ func TestEmitAndReceive(t *testing.T) {
 			"topic": "orders.created",
 			"data":  eventData,
 		})
-		req, _ := http.NewRequest("POST", env.ServerURL+"/emit", bytes.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", bytes.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -366,7 +366,7 @@ func TestAckNack(t *testing.T) {
 
 	t.Run("manual ack works", func(t *testing.T) {
 		// Connect WebSocket
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
@@ -393,7 +393,7 @@ func TestAckNack(t *testing.T) {
 
 		// Emit an event
 		payload := `{"topic": "ack-test.item", "data": {"test": true}}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 		resp, _ := http.DefaultClient.Do(req)
@@ -430,7 +430,7 @@ func TestAckNack(t *testing.T) {
 
 	t.Run("ack unknown event returns error", func(t *testing.T) {
 		// Connect WebSocket
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
@@ -469,13 +469,13 @@ func TestConsumerGroups(t *testing.T) {
 
 	t.Run("consumer group shares messages between members", func(t *testing.T) {
 		// Connect two WebSocket clients to the same consumer group
-		conn1, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect client 1: %v", err)
 		}
 		defer conn1.Close()
 
-		conn2, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect client 2: %v", err)
 		}
@@ -515,7 +515,7 @@ func TestConsumerGroups(t *testing.T) {
 				"topic": "cg-test.order",
 				"data":  map[string]int{"order": i},
 			})
-			req, _ := http.NewRequest("POST", env.ServerURL+"/emit", bytes.NewReader(payload))
+			req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", bytes.NewReader(payload))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 			resp, _ := http.DefaultClient.Do(req)
@@ -561,13 +561,13 @@ func TestConsumerGroups(t *testing.T) {
 
 	t.Run("different groups receive all messages independently", func(t *testing.T) {
 		// Connect two WebSocket clients to DIFFERENT consumer groups
-		conn1, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect client 1: %v", err)
 		}
 		defer conn1.Close()
 
-		conn2, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect client 2: %v", err)
 		}
@@ -610,7 +610,7 @@ func TestConsumerGroups(t *testing.T) {
 				"topic": "cg-multi.event",
 				"data":  map[string]int{"num": i},
 			})
-			req, _ := http.NewRequest("POST", env.ServerURL+"/emit", bytes.NewReader(payload))
+			req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", bytes.NewReader(payload))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 			resp, _ := http.DefaultClient.Do(req)
@@ -660,7 +660,7 @@ func TestDeadLetterQueue(t *testing.T) {
 
 	t.Run("message moves to DLQ after max retries", func(t *testing.T) {
 		// Connect WebSocket with manual ack
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
@@ -686,7 +686,7 @@ func TestDeadLetterQueue(t *testing.T) {
 
 		// Emit an event
 		payload := `{"topic": "dlq-test.fail", "data": {"will": "fail"}}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 		resp, _ := http.DefaultClient.Do(req)
@@ -725,7 +725,7 @@ func TestDeadLetterQueue(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 
 		// Check DLQ via API
-		dlqReq, _ := http.NewRequest("GET", env.ServerURL+"/dlq?topic=dlq-test.fail", nil)
+		dlqReq, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/dlq?topic=dlq-test.fail", nil)
 		dlqReq.Header.Set("Authorization", "Bearer "+TestAPIKey)
 		dlqResp, err := http.DefaultClient.Do(dlqReq)
 		if err != nil {
@@ -747,7 +747,7 @@ func TestDeadLetterQueue(t *testing.T) {
 	})
 
 	t.Run("DLQ list returns messages", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", env.ServerURL+"/dlq", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/dlq", nil)
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -772,7 +772,7 @@ func TestDeadLetterQueue(t *testing.T) {
 	})
 
 	t.Run("DLQ requires authorization", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", env.ServerURL+"/dlq", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/dlq", nil)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -794,7 +794,7 @@ func TestEventsReplayAPI(t *testing.T) {
 		// Emit some events first
 		for i := 1; i <= 3; i++ {
 			payload := `{"topic": "replay-test.event", "data": {"num": ` + strconv.Itoa(i) + `}}`
-			req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+			req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 			resp, _ := http.DefaultClient.Do(req)
@@ -805,7 +805,7 @@ func TestEventsReplayAPI(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 
 		// Query events
-		req, _ := http.NewRequest("GET", env.ServerURL+"/events?topic=replay-test.event", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/events?topic=replay-test.event", nil)
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -833,7 +833,7 @@ func TestEventsReplayAPI(t *testing.T) {
 	})
 
 	t.Run("events list with limit", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", env.ServerURL+"/events?limit=2", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/events?limit=2", nil)
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -856,7 +856,7 @@ func TestEventsReplayAPI(t *testing.T) {
 	})
 
 	t.Run("events stats returns stream info", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", env.ServerURL+"/events/stats", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/events/stats", nil)
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -887,7 +887,7 @@ func TestEventsReplayAPI(t *testing.T) {
 	})
 
 	t.Run("events requires authorization", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", env.ServerURL+"/events", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/events", nil)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -909,7 +909,7 @@ func TestWildcardSubscription(t *testing.T) {
 
 	t.Run("wildcard * matches single segment", func(t *testing.T) {
 		// Connect WebSocket
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
 		if err != nil {
 			t.Fatalf("failed to connect: %v", err)
 		}
@@ -934,7 +934,7 @@ func TestWildcardSubscription(t *testing.T) {
 
 		// Emit matching event
 		payload := `{"topic": "wildcard.match", "data": {"matched": true}}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 		resp, _ := http.DefaultClient.Do(req)
@@ -965,7 +965,7 @@ func TestWebhooksCRUD(t *testing.T) {
 
 	t.Run("create webhook", func(t *testing.T) {
 		payload := `{"url": "https://example.com/webhook", "topics": ["orders.*", "payments.completed"]}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/webhooks", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/webhooks", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -1005,14 +1005,10 @@ func TestWebhooksCRUD(t *testing.T) {
 		if result["enabled"] != true {
 			t.Error("expected webhook to be enabled by default")
 		}
-
-		if result["environment"] != "test" {
-			t.Errorf("expected environment test, got %v", result["environment"])
-		}
 	})
 
 	t.Run("list webhooks", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/webhooks", nil)
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -1050,7 +1046,7 @@ func TestWebhooksCRUD(t *testing.T) {
 			t.Skip("no webhook created")
 		}
 
-		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks/"+createdWebhookID, nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/webhooks/"+createdWebhookID, nil)
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -1082,7 +1078,7 @@ func TestWebhooksCRUD(t *testing.T) {
 		}
 
 		payload := `{"enabled": false}`
-		req, _ := http.NewRequest("PUT", env.ServerURL+"/webhooks/"+createdWebhookID, strings.NewReader(payload))
+		req, _ := http.NewRequest("PUT", env.ServerURL+"/api/v1/webhooks/"+createdWebhookID, strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -1111,7 +1107,7 @@ func TestWebhooksCRUD(t *testing.T) {
 		}
 
 		payload := `{"url": "https://newsite.com/events", "topics": ["users.*"], "enabled": true}`
-		req, _ := http.NewRequest("PUT", env.ServerURL+"/webhooks/"+createdWebhookID, strings.NewReader(payload))
+		req, _ := http.NewRequest("PUT", env.ServerURL+"/api/v1/webhooks/"+createdWebhookID, strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -1147,7 +1143,7 @@ func TestWebhooksCRUD(t *testing.T) {
 			t.Skip("no webhook created")
 		}
 
-		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks/"+createdWebhookID+"/deliveries", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/webhooks/"+createdWebhookID+"/deliveries", nil)
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -1176,7 +1172,7 @@ func TestWebhooksCRUD(t *testing.T) {
 			t.Skip("no webhook created")
 		}
 
-		req, _ := http.NewRequest("DELETE", env.ServerURL+"/webhooks/"+createdWebhookID, nil)
+		req, _ := http.NewRequest("DELETE", env.ServerURL+"/api/v1/webhooks/"+createdWebhookID, nil)
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -1190,7 +1186,7 @@ func TestWebhooksCRUD(t *testing.T) {
 		}
 
 		// Verify it's deleted
-		req2, _ := http.NewRequest("GET", env.ServerURL+"/webhooks/"+createdWebhookID, nil)
+		req2, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/webhooks/"+createdWebhookID, nil)
 		req2.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp2, _ := http.DefaultClient.Do(req2)
@@ -1211,7 +1207,7 @@ func TestWebhooksValidation(t *testing.T) {
 
 	t.Run("create webhook requires url", func(t *testing.T) {
 		payload := `{"topics": ["orders.*"]}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/webhooks", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/webhooks", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -1228,7 +1224,7 @@ func TestWebhooksValidation(t *testing.T) {
 
 	t.Run("create webhook requires topics", func(t *testing.T) {
 		payload := `{"url": "https://example.com/webhook"}`
-		req, _ := http.NewRequest("POST", env.ServerURL+"/webhooks", strings.NewReader(payload))
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/webhooks", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
@@ -1244,7 +1240,7 @@ func TestWebhooksValidation(t *testing.T) {
 	})
 
 	t.Run("webhook requires authorization", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/webhooks", nil)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -1258,7 +1254,7 @@ func TestWebhooksValidation(t *testing.T) {
 	})
 
 	t.Run("get non-existent webhook returns 404", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks/00000000-0000-0000-0000-000000000000", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/webhooks/00000000-0000-0000-0000-000000000000", nil)
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -1273,7 +1269,7 @@ func TestWebhooksValidation(t *testing.T) {
 	})
 
 	t.Run("invalid webhook id returns 400", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", env.ServerURL+"/webhooks/invalid-uuid", nil)
+		req, _ := http.NewRequest("GET", env.ServerURL+"/api/v1/webhooks/invalid-uuid", nil)
 		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
 
 		resp, err := http.DefaultClient.Do(req)

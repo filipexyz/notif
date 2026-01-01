@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	// TestAPIKey is the API key used for testing (24 chars after prefix)
-	TestAPIKey = "nsh_test_abcdefghij12345678901234"
+	// TestAPIKey is the API key used for testing (nsh_ + 20 chars)
+	TestAPIKey = "nsh_abcdefghij1234567890"
 )
 
 // TestEnv holds all test dependencies
@@ -249,10 +249,10 @@ func seedTestAPIKey(ctx context.Context, db *pgxpool.Pool) error {
 	hash := hex.EncodeToString(h[:])
 
 	_, err := db.Exec(ctx, `
-		INSERT INTO api_keys (key_hash, key_prefix, environment, name)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO api_keys (key_hash, key_prefix, name)
+		VALUES ($1, $2, $3)
 		ON CONFLICT (key_hash) DO NOTHING
-	`, hash, "nsh_test_abcdef", "test", "E2E Test Key")
+	`, hash, "nsh_abcdefgh", "E2E Test Key")
 
 	return err
 }

@@ -146,6 +146,15 @@ func (r *DLQReader) Delete(ctx context.Context, seq uint64) error {
 	return r.stream.DeleteMsg(ctx, seq)
 }
 
+// Count returns the total number of messages in the DLQ.
+func (r *DLQReader) Count(ctx context.Context) (int64, error) {
+	info, err := r.stream.Info(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int64(info.State.Msgs), nil
+}
+
 // Replay republishes a DLQ message to its original topic.
 func (r *DLQReader) Replay(ctx context.Context, seq uint64, publisher *Publisher) error {
 	entry, err := r.Get(ctx, seq)

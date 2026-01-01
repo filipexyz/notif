@@ -8,9 +8,8 @@ import (
 
 // Config represents the CLI configuration.
 type Config struct {
-	APIKey      string `json:"api_key,omitempty"`
-	Server      string `json:"server,omitempty"`
-	Environment string `json:"environment,omitempty"`
+	APIKey string `json:"api_key,omitempty"`
+	Server string `json:"server,omitempty"`
 }
 
 // DefaultPath returns the default config file path.

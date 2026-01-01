@@ -36,7 +36,7 @@ type DLQListResponse struct {
 
 // DLQList lists messages in the dead letter queue.
 func (c *Client) DLQList(topic string, limit int) (*DLQListResponse, error) {
-	u, _ := url.Parse(c.server + "/dlq")
+	u, _ := url.Parse(c.server + "/api/v1/dlq")
 	q := u.Query()
 	if topic != "" {
 		q.Set("topic", topic)
@@ -76,7 +76,7 @@ func (c *Client) DLQList(topic string, limit int) (*DLQListResponse, error) {
 
 // DLQGet retrieves a specific DLQ message.
 func (c *Client) DLQGet(seq uint64) (*DLQEntry, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/dlq/%d", c.server, seq), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/dlq/%d", c.server, seq), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (c *Client) DLQGet(seq uint64) (*DLQEntry, error) {
 
 // DLQReplay replays a DLQ message to its original topic.
 func (c *Client) DLQReplay(seq uint64) error {
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/dlq/%d/replay", c.server, seq), nil)
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/dlq/%d/replay", c.server, seq), nil)
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (c *Client) DLQReplay(seq uint64) error {
 
 // DLQDelete removes a message from the DLQ.
 func (c *Client) DLQDelete(seq uint64) error {
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/dlq/%d", c.server, seq), nil)
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/api/v1/dlq/%d", c.server, seq), nil)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ type DLQReplayAllResponse struct {
 
 // DLQReplayAll replays all messages from the DLQ.
 func (c *Client) DLQReplayAll(topic string) (*DLQReplayAllResponse, error) {
-	u, _ := url.Parse(c.server + "/dlq/replay-all")
+	u, _ := url.Parse(c.server + "/api/v1/dlq/replay-all")
 	if topic != "" {
 		q := u.Query()
 		q.Set("topic", topic)
@@ -192,7 +192,7 @@ type DLQPurgeResponse struct {
 
 // DLQPurge deletes all messages from the DLQ.
 func (c *Client) DLQPurge(topic string) (*DLQPurgeResponse, error) {
-	u, _ := url.Parse(c.server + "/dlq/purge")
+	u, _ := url.Parse(c.server + "/api/v1/dlq/purge")
 	if topic != "" {
 		q := u.Query()
 		q.Set("topic", topic)

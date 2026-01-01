@@ -10,13 +10,12 @@ import (
 
 // Webhook represents a webhook configuration.
 type Webhook struct {
-	ID          string   `json:"id"`
-	URL         string   `json:"url"`
-	Topics      []string `json:"topics"`
-	Secret      string   `json:"secret,omitempty"`
-	Enabled     bool     `json:"enabled"`
-	Environment string   `json:"environment"`
-	CreatedAt   string   `json:"created_at"`
+	ID        string   `json:"id"`
+	URL       string   `json:"url"`
+	Topics    []string `json:"topics"`
+	Secret    string   `json:"secret,omitempty"`
+	Enabled   bool     `json:"enabled"`
+	CreatedAt string   `json:"created_at"`
 }
 
 // WebhookListResponse is the response from listing webhooks.
@@ -59,7 +58,7 @@ func (c *Client) WebhookCreate(url string, topics []string) (*Webhook, error) {
 		Topics: topics,
 	})
 
-	req, err := http.NewRequest("POST", c.server+"/webhooks", bytes.NewReader(reqBody))
+	req, err := http.NewRequest("POST", c.server+"/api/v1/webhooks", bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +93,7 @@ func (c *Client) WebhookCreate(url string, topics []string) (*Webhook, error) {
 
 // WebhookList lists all webhooks.
 func (c *Client) WebhookList() (*WebhookListResponse, error) {
-	req, err := http.NewRequest("GET", c.server+"/webhooks", nil)
+	req, err := http.NewRequest("GET", c.server+"/api/v1/webhooks", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +119,7 @@ func (c *Client) WebhookList() (*WebhookListResponse, error) {
 
 // WebhookGet retrieves a specific webhook.
 func (c *Client) WebhookGet(id string) (*Webhook, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/webhooks/%s", c.server, id), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/webhooks/%s", c.server, id), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +158,7 @@ type UpdateWebhookRequest struct {
 func (c *Client) WebhookUpdate(id string, req UpdateWebhookRequest) (*Webhook, error) {
 	reqBody, _ := json.Marshal(req)
 
-	httpReq, err := http.NewRequest("PUT", fmt.Sprintf("%s/webhooks/%s", c.server, id), bytes.NewReader(reqBody))
+	httpReq, err := http.NewRequest("PUT", fmt.Sprintf("%s/api/v1/webhooks/%s", c.server, id), bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +185,7 @@ func (c *Client) WebhookUpdate(id string, req UpdateWebhookRequest) (*Webhook, e
 
 // WebhookDelete deletes a webhook.
 func (c *Client) WebhookDelete(id string) error {
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/webhooks/%s", c.server, id), nil)
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/api/v1/webhooks/%s", c.server, id), nil)
 	if err != nil {
 		return err
 	}
@@ -207,7 +206,7 @@ func (c *Client) WebhookDelete(id string) error {
 
 // WebhookDeliveries lists recent deliveries for a webhook.
 func (c *Client) WebhookDeliveries(id string) (*WebhookDeliveriesResponse, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/webhooks/%s/deliveries", c.server, id), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/webhooks/%s/deliveries", c.server, id), nil)
 	if err != nil {
 		return nil, err
 	}

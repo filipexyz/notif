@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var apiKeyRegex = regexp.MustCompile(`^nsh_(live|test)_[a-zA-Z0-9]{24}$`)
+var apiKeyRegex = regexp.MustCompile(`^nsh_[a-zA-Z0-9]{20}$`)
 
 var authCmd = &cobra.Command{
 	Use:   "auth <api-key>",
@@ -19,19 +19,12 @@ var authCmd = &cobra.Command{
 
 		// Validate format
 		if !apiKeyRegex.MatchString(apiKey) {
-			out.Error("Invalid API key format. Expected: nsh_(live|test)_<24 chars>")
+			out.Error("Invalid API key format. Expected: nsh_<20 chars>")
 			return
-		}
-
-		// Determine environment from key
-		env := "live"
-		if len(apiKey) > 4 && apiKey[4:8] == "test" {
-			env = "test"
 		}
 
 		// Save to config
 		cfg.APIKey = apiKey
-		cfg.Environment = env
 		if serverURL != "" {
 			cfg.Server = serverURL
 		}
@@ -41,7 +34,7 @@ var authCmd = &cobra.Command{
 			return
 		}
 
-		out.Success("API key saved (%s environment)", env)
+		out.Success("API key saved")
 	},
 }
 

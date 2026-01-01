@@ -135,7 +135,6 @@ var webhooksGetCmd = &cobra.Command{
 		out.KeyValue("URL", webhook.URL)
 		out.KeyValue("Topics", strings.Join(webhook.Topics, ", "))
 		out.KeyValue("Enabled", boolToStr(webhook.Enabled))
-		out.KeyValue("Environment", webhook.Environment)
 		out.KeyValue("Created", webhook.CreatedAt)
 	},
 }

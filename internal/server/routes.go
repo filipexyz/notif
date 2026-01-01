@@ -28,26 +28,9 @@ func (s *Server) routes() http.Handler {
 	queries := db.New(s.db)
 
 	// ================================================================
-	// DASHBOARD ROUTES (Clerk JWT Authentication)
-	// Used by web dashboard for account management
+	// API v1 ROUTES
+	// Unified auth: accepts both API key (Bearer nsh_xxx) and Clerk JWT
 	// ================================================================
-	clerkAuth := middleware.NewClerkAuth()
-	apiKeyHandler := handler.NewAPIKeyHandler(queries)
-
-	r.Route("/dashboard", func(r chi.Router) {
-		r.Use(clerkAuth.Handler)
-
-		// API Key Management
-		r.Post("/api-keys", apiKeyHandler.Create)
-		r.Get("/api-keys", apiKeyHandler.List)
-		r.Delete("/api-keys/{id}", apiKeyHandler.Revoke)
-	})
-
-	// ================================================================
-	// API ROUTES (API Key Authentication)
-	// Used by CLI, SDKs, and programmatic access
-	// ================================================================
-	authMiddleware := middleware.NewAuth(queries)
 	publisher := nats.NewPublisher(s.nats.JetStream())
 	emitHandler := handler.NewEmitHandler(publisher, queries)
 
@@ -55,29 +38,32 @@ func (s *Server) routes() http.Handler {
 	dlqPublisher := nats.NewDLQPublisher(s.nats.JetStream())
 	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr, dlqPublisher)
 
-	// DLQ handler
 	dlqReader, _ := nats.NewDLQReader(s.nats.JetStream())
 	dlqHandler := handler.NewDLQHandler(dlqReader, publisher)
 
-	// Events handler
 	eventReader := nats.NewEventReader(s.nats.Stream())
 	eventsHandler := handler.NewEventsHandler(eventReader)
 
-	// Webhook handler
 	webhookHandler := handler.NewWebhookHandler(queries)
+	apiKeyHandler := handler.NewAPIKeyHandler(queries)
+	statsHandler := handler.NewStatsHandler(queries, eventReader, dlqReader)
 
+	// WebSocket endpoint at root (no /api/v1 prefix for WS)
 	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware.Handler)
+		r.Use(middleware.UnifiedAuth(queries))
+		r.Get("/ws", subscribeHandler.Subscribe)
+	})
 
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(middleware.UnifiedAuth(queries))
+
+		// Events
 		r.Post("/emit", emitHandler.Emit)
-		r.Get("/subscribe", subscribeHandler.Subscribe)
-
-		// Events query endpoints
 		r.Get("/events", eventsHandler.List)
 		r.Get("/events/stats", eventsHandler.Stats)
 		r.Get("/events/{seq}", eventsHandler.Get)
 
-		// Webhook endpoints
+		// Webhooks
 		r.Post("/webhooks", webhookHandler.Create)
 		r.Get("/webhooks", webhookHandler.List)
 		r.Get("/webhooks/{id}", webhookHandler.Get)
@@ -85,13 +71,28 @@ func (s *Server) routes() http.Handler {
 		r.Delete("/webhooks/{id}", webhookHandler.Delete)
 		r.Get("/webhooks/{id}/deliveries", webhookHandler.Deliveries)
 
-		// DLQ endpoints
+		// DLQ
 		r.Get("/dlq", dlqHandler.List)
 		r.Get("/dlq/{seq}", dlqHandler.Get)
 		r.Post("/dlq/{seq}/replay", dlqHandler.Replay)
 		r.Delete("/dlq/{seq}", dlqHandler.Delete)
 		r.Post("/dlq/replay-all", dlqHandler.ReplayAll)
 		r.Delete("/dlq/purge", dlqHandler.Purge)
+
+		// Stats (observability)
+		r.Get("/stats/overview", statsHandler.Overview)
+		r.Get("/stats/events", statsHandler.Events)
+		r.Get("/stats/webhooks", statsHandler.Webhooks)
+		r.Get("/stats/dlq", statsHandler.DLQ)
+
+		// API Keys (requires Clerk auth, not API key)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireClerkAuth())
+
+			r.Post("/api-keys", apiKeyHandler.Create)
+			r.Get("/api-keys", apiKeyHandler.List)
+			r.Delete("/api-keys/{id}", apiKeyHandler.Revoke)
+		})
 	})
 
 	return r
