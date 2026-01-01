@@ -460,6 +460,197 @@ func TestAckNack(t *testing.T) {
 	})
 }
 
+func TestConsumerGroups(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer env.Cleanup(t)
+
+	wsURL := strings.Replace(env.ServerURL, "http://", "ws://", 1)
+
+	t.Run("consumer group shares messages between members", func(t *testing.T) {
+		// Connect two WebSocket clients to the same consumer group
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect client 1: %v", err)
+		}
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect client 2: %v", err)
+		}
+		defer conn2.Close()
+
+		// Both subscribe to same group
+		groupName := "test-workers-" + time.Now().Format("150405")
+		subscribeMsg := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"cg-test.*"},
+			"options": map[string]interface{}{
+				"auto_ack": true,
+				"group":    groupName,
+			},
+		}
+
+		if err := conn1.WriteJSON(subscribeMsg); err != nil {
+			t.Fatalf("failed to subscribe client 1: %v", err)
+		}
+		if err := conn2.WriteJSON(subscribeMsg); err != nil {
+			t.Fatalf("failed to subscribe client 2: %v", err)
+		}
+
+		// Wait for subscribed confirmations
+		conn1.SetReadDeadline(time.Now().Add(5 * time.Second))
+		conn2.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var subResp map[string]interface{}
+		conn1.ReadJSON(&subResp)
+		conn2.ReadJSON(&subResp)
+
+		// Small delay to ensure consumers are ready
+		time.Sleep(100 * time.Millisecond)
+
+		// Emit 4 events
+		for i := 1; i <= 4; i++ {
+			payload, _ := json.Marshal(map[string]interface{}{
+				"topic": "cg-test.order",
+				"data":  map[string]int{"order": i},
+			})
+			req, _ := http.NewRequest("POST", env.ServerURL+"/emit", bytes.NewReader(payload))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+			resp, _ := http.DefaultClient.Do(req)
+			resp.Body.Close()
+		}
+
+		// Collect events from both clients
+		received1 := 0
+		received2 := 0
+
+		// Read from client 1 (non-blocking)
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		for {
+			var eventResp map[string]interface{}
+			if err := conn1.ReadJSON(&eventResp); err != nil {
+				break
+			}
+			if eventResp["type"] == "event" {
+				received1++
+			}
+		}
+
+		// Read from client 2 (non-blocking)
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		for {
+			var eventResp map[string]interface{}
+			if err := conn2.ReadJSON(&eventResp); err != nil {
+				break
+			}
+			if eventResp["type"] == "event" {
+				received2++
+			}
+		}
+
+		// Total should be 4 (all events delivered exactly once across the group)
+		total := received1 + received2
+		if total != 4 {
+			t.Errorf("expected 4 total events, got %d (client1=%d, client2=%d)", total, received1, received2)
+		}
+
+		t.Logf("Consumer group distribution: client1=%d, client2=%d", received1, received2)
+	})
+
+	t.Run("different groups receive all messages independently", func(t *testing.T) {
+		// Connect two WebSocket clients to DIFFERENT consumer groups
+		conn1, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect client 1: %v", err)
+		}
+		defer conn1.Close()
+
+		conn2, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect client 2: %v", err)
+		}
+		defer conn2.Close()
+
+		// Subscribe to different groups
+		ts := time.Now().Format("150405")
+		subscribeMsg1 := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"cg-multi.*"},
+			"options": map[string]interface{}{
+				"auto_ack": true,
+				"group":    "group-a-" + ts,
+			},
+		}
+		subscribeMsg2 := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"cg-multi.*"},
+			"options": map[string]interface{}{
+				"auto_ack": true,
+				"group":    "group-b-" + ts,
+			},
+		}
+
+		conn1.WriteJSON(subscribeMsg1)
+		conn2.WriteJSON(subscribeMsg2)
+
+		// Wait for subscribed confirmations
+		conn1.SetReadDeadline(time.Now().Add(5 * time.Second))
+		conn2.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var subResp map[string]interface{}
+		conn1.ReadJSON(&subResp)
+		conn2.ReadJSON(&subResp)
+
+		time.Sleep(100 * time.Millisecond)
+
+		// Emit 2 events
+		for i := 1; i <= 2; i++ {
+			payload, _ := json.Marshal(map[string]interface{}{
+				"topic": "cg-multi.event",
+				"data":  map[string]int{"num": i},
+			})
+			req, _ := http.NewRequest("POST", env.ServerURL+"/emit", bytes.NewReader(payload))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+			resp, _ := http.DefaultClient.Do(req)
+			resp.Body.Close()
+		}
+
+		// Both groups should receive all 2 events
+		received1 := 0
+		received2 := 0
+
+		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		for {
+			var eventResp map[string]interface{}
+			if err := conn1.ReadJSON(&eventResp); err != nil {
+				break
+			}
+			if eventResp["type"] == "event" {
+				received1++
+			}
+		}
+
+		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		for {
+			var eventResp map[string]interface{}
+			if err := conn2.ReadJSON(&eventResp); err != nil {
+				break
+			}
+			if eventResp["type"] == "event" {
+				received2++
+			}
+		}
+
+		if received1 != 2 {
+			t.Errorf("group-a expected 2 events, got %d", received1)
+		}
+		if received2 != 2 {
+			t.Errorf("group-b expected 2 events, got %d", received2)
+		}
+	})
+}
+
 func TestWildcardSubscription(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer env.Cleanup(t)
