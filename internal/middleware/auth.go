@@ -66,6 +66,16 @@ func GetAPIKey(ctx context.Context) *db.GetAPIKeyByHashRow {
 	return key
 }
 
+// GetAPIKeyOrgID retrieves the organization ID from the API key in context.
+// Returns empty string if no API key or no org_id is set.
+func GetAPIKeyOrgID(ctx context.Context) string {
+	key := GetAPIKey(ctx)
+	if key == nil || !key.OrgID.Valid {
+		return ""
+	}
+	return key.OrgID.String
+}
+
 func extractBearerToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
 	if auth == "" {

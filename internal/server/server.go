@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/nats"
@@ -26,6 +27,14 @@ type Server struct {
 
 // New creates a new Server.
 func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
+	// Initialize Clerk for dashboard authentication
+	if cfg.ClerkSecretKey != "" {
+		clerk.SetKey(cfg.ClerkSecretKey)
+		slog.Info("Clerk authentication enabled for dashboard routes")
+	} else {
+		slog.Warn("CLERK_SECRET_KEY not set - dashboard routes will not work")
+	}
+
 	hub := websocket.NewHub()
 	go hub.Run()
 

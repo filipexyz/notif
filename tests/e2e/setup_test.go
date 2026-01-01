@@ -193,7 +193,8 @@ func runMigrations(ctx context.Context, db *pgxpool.Pool) error {
 			rate_limit_per_second INT DEFAULT 100,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			last_used_at TIMESTAMPTZ,
-			revoked_at TIMESTAMPTZ
+			revoked_at TIMESTAMPTZ,
+			org_id VARCHAR(64)
 		);
 
 		CREATE TABLE IF NOT EXISTS events (

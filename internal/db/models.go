@@ -18,6 +18,7 @@ type ApiKey struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	LastUsedAt         pgtype.Timestamptz `json:"last_used_at"`
 	RevokedAt          pgtype.Timestamptz `json:"revoked_at"`
+	OrgID              pgtype.Text        `json:"org_id"`
 }
 
 type ConsumerGroup struct {

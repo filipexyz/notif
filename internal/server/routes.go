@@ -25,8 +25,28 @@ func (s *Server) routes() http.Handler {
 	r.Get("/health", healthHandler.Health)
 	r.Get("/ready", healthHandler.Ready)
 
-	// API routes (require auth)
 	queries := db.New(s.db)
+
+	// ================================================================
+	// DASHBOARD ROUTES (Clerk JWT Authentication)
+	// Used by web dashboard for account management
+	// ================================================================
+	clerkAuth := middleware.NewClerkAuth()
+	apiKeyHandler := handler.NewAPIKeyHandler(queries)
+
+	r.Route("/dashboard", func(r chi.Router) {
+		r.Use(clerkAuth.Handler)
+
+		// API Key Management
+		r.Post("/api-keys", apiKeyHandler.Create)
+		r.Get("/api-keys", apiKeyHandler.List)
+		r.Delete("/api-keys/{id}", apiKeyHandler.Revoke)
+	})
+
+	// ================================================================
+	// API ROUTES (API Key Authentication)
+	// Used by CLI, SDKs, and programmatic access
+	// ================================================================
 	authMiddleware := middleware.NewAuth(queries)
 	publisher := nats.NewPublisher(s.nats.JetStream())
 	emitHandler := handler.NewEmitHandler(publisher, queries)

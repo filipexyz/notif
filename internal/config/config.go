@@ -20,6 +20,9 @@ type Config struct {
 	// Logging
 	LogLevel  string `env:"LOG_LEVEL" envDefault:"info"`
 	LogFormat string `env:"LOG_FORMAT" envDefault:"json"`
+
+	// Clerk Authentication (for dashboard routes)
+	ClerkSecretKey string `env:"CLERK_SECRET_KEY"`
 }
 
 func Load() (*Config, error) {

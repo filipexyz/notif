@@ -12,9 +12,9 @@ import (
 )
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO api_keys (key_hash, key_prefix, environment, name, rate_limit_per_second)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, key_prefix, environment, name, rate_limit_per_second, created_at
+INSERT INTO api_keys (key_hash, key_prefix, environment, name, rate_limit_per_second, org_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, key_prefix, environment, name, rate_limit_per_second, created_at, org_id
 `
 
 type CreateAPIKeyParams struct {
@@ -23,6 +23,7 @@ type CreateAPIKeyParams struct {
 	Environment        string      `json:"environment"`
 	Name               pgtype.Text `json:"name"`
 	RateLimitPerSecond pgtype.Int4 `json:"rate_limit_per_second"`
+	OrgID              pgtype.Text `json:"org_id"`
 }
 
 type CreateAPIKeyRow struct {
@@ -32,6 +33,7 @@ type CreateAPIKeyRow struct {
 	Name               pgtype.Text        `json:"name"`
 	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	OrgID              pgtype.Text        `json:"org_id"`
 }
 
 func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (CreateAPIKeyRow, error) {
@@ -41,6 +43,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Cre
 		arg.Environment,
 		arg.Name,
 		arg.RateLimitPerSecond,
+		arg.OrgID,
 	)
 	var i CreateAPIKeyRow
 	err := row.Scan(
@@ -50,12 +53,13 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Cre
 		&i.Name,
 		&i.RateLimitPerSecond,
 		&i.CreatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
-SELECT id, key_prefix, environment, name, rate_limit_per_second, revoked_at, created_at
+SELECT id, key_prefix, environment, name, rate_limit_per_second, revoked_at, created_at, org_id
 FROM api_keys
 WHERE key_hash = $1 AND revoked_at IS NULL
 `
@@ -68,6 +72,7 @@ type GetAPIKeyByHashRow struct {
 	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
 	RevokedAt          pgtype.Timestamptz `json:"revoked_at"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	OrgID              pgtype.Text        `json:"org_id"`
 }
 
 func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKeyByHashRow, error) {
@@ -81,12 +86,51 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKe
 		&i.RateLimitPerSecond,
 		&i.RevokedAt,
 		&i.CreatedAt,
+		&i.OrgID,
+	)
+	return i, err
+}
+
+const getAPIKeyByIdAndOrg = `-- name: GetAPIKeyByIdAndOrg :one
+SELECT id, key_prefix, environment, name, rate_limit_per_second, revoked_at, created_at, org_id
+FROM api_keys
+WHERE id = $1 AND org_id = $2 AND revoked_at IS NULL
+`
+
+type GetAPIKeyByIdAndOrgParams struct {
+	ID    pgtype.UUID `json:"id"`
+	OrgID pgtype.Text `json:"org_id"`
+}
+
+type GetAPIKeyByIdAndOrgRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	KeyPrefix          string             `json:"key_prefix"`
+	Environment        string             `json:"environment"`
+	Name               pgtype.Text        `json:"name"`
+	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
+	RevokedAt          pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	OrgID              pgtype.Text        `json:"org_id"`
+}
+
+func (q *Queries) GetAPIKeyByIdAndOrg(ctx context.Context, arg GetAPIKeyByIdAndOrgParams) (GetAPIKeyByIdAndOrgRow, error) {
+	row := q.db.QueryRow(ctx, getAPIKeyByIdAndOrg, arg.ID, arg.OrgID)
+	var i GetAPIKeyByIdAndOrgRow
+	err := row.Scan(
+		&i.ID,
+		&i.KeyPrefix,
+		&i.Environment,
+		&i.Name,
+		&i.RateLimitPerSecond,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const listAPIKeys = `-- name: ListAPIKeys :many
-SELECT id, key_prefix, environment, name, rate_limit_per_second, created_at, last_used_at, revoked_at
+SELECT id, key_prefix, environment, name, rate_limit_per_second, created_at, last_used_at, revoked_at, org_id
 FROM api_keys
 ORDER BY created_at DESC
 `
@@ -100,6 +144,7 @@ type ListAPIKeysRow struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	LastUsedAt         pgtype.Timestamptz `json:"last_used_at"`
 	RevokedAt          pgtype.Timestamptz `json:"revoked_at"`
+	OrgID              pgtype.Text        `json:"org_id"`
 }
 
 func (q *Queries) ListAPIKeys(ctx context.Context) ([]ListAPIKeysRow, error) {
@@ -111,6 +156,56 @@ func (q *Queries) ListAPIKeys(ctx context.Context) ([]ListAPIKeysRow, error) {
 	items := []ListAPIKeysRow{}
 	for rows.Next() {
 		var i ListAPIKeysRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.KeyPrefix,
+			&i.Environment,
+			&i.Name,
+			&i.RateLimitPerSecond,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+			&i.RevokedAt,
+			&i.OrgID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAPIKeysByOrg = `-- name: ListAPIKeysByOrg :many
+
+SELECT id, key_prefix, environment, name, rate_limit_per_second, created_at, last_used_at, revoked_at
+FROM api_keys
+WHERE org_id = $1
+ORDER BY created_at DESC
+`
+
+type ListAPIKeysByOrgRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	KeyPrefix          string             `json:"key_prefix"`
+	Environment        string             `json:"environment"`
+	Name               pgtype.Text        `json:"name"`
+	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	LastUsedAt         pgtype.Timestamptz `json:"last_used_at"`
+	RevokedAt          pgtype.Timestamptz `json:"revoked_at"`
+}
+
+// Organization-scoped queries for dashboard
+func (q *Queries) ListAPIKeysByOrg(ctx context.Context, orgID pgtype.Text) ([]ListAPIKeysByOrgRow, error) {
+	rows, err := q.db.Query(ctx, listAPIKeysByOrg, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAPIKeysByOrgRow{}
+	for rows.Next() {
+		var i ListAPIKeysByOrgRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.KeyPrefix,
@@ -137,6 +232,21 @@ UPDATE api_keys SET revoked_at = NOW() WHERE id = $1
 
 func (q *Queries) RevokeAPIKey(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, revokeAPIKey, id)
+	return err
+}
+
+const revokeAPIKeyByOrg = `-- name: RevokeAPIKeyByOrg :exec
+UPDATE api_keys SET revoked_at = NOW()
+WHERE id = $1 AND org_id = $2 AND revoked_at IS NULL
+`
+
+type RevokeAPIKeyByOrgParams struct {
+	ID    pgtype.UUID `json:"id"`
+	OrgID pgtype.Text `json:"org_id"`
+}
+
+func (q *Queries) RevokeAPIKeyByOrg(ctx context.Context, arg RevokeAPIKeyByOrgParams) error {
+	_, err := q.db.Exec(ctx, revokeAPIKeyByOrg, arg.ID, arg.OrgID)
 	return err
 }
 
