@@ -47,9 +47,19 @@ func (cm *ConsumerManager) CreateConsumer(ctx context.Context, opts Subscription
 	// Convert topics to NATS subjects with org isolation
 	// "leads.*" -> "events.{org_id}.leads.*"
 	// "agent.*.error" -> "events.{org_id}.agent.*.error"
+	// Special case: "*" -> "events.{org_id}.>" (match all topics)
+	// In NATS, "*" matches exactly one token, while ">" matches one or more tokens.
+	// A standalone "*" subscription should match all topics, including multi-segment
+	// ones like "orders.created", so we convert it to ">" which is the NATS wildcard
+	// for "one or more tokens".
 	filterSubjects := make([]string, len(opts.Topics))
 	for i, topic := range opts.Topics {
-		filterSubjects[i] = "events." + opts.OrgID + "." + topic
+		if topic == "*" {
+			// Standalone "*" means "all topics" - use ">" to match any depth
+			filterSubjects[i] = "events." + opts.OrgID + ".>"
+		} else {
+			filterSubjects[i] = "events." + opts.OrgID + "." + topic
+		}
 	}
 
 	config := jetstream.ConsumerConfig{
@@ -57,6 +67,7 @@ func (cm *ConsumerManager) CreateConsumer(ctx context.Context, opts Subscription
 		AckWait:        opts.AckTimeout,
 		MaxDeliver:     opts.MaxRetries + 1,
 		FilterSubjects: filterSubjects,
+		DeliverPolicy:  jetstream.DeliverNewPolicy, // Only deliver new messages, not historical
 	}
 
 	if opts.Group != "" {

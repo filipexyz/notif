@@ -954,6 +954,218 @@ func TestWildcardSubscription(t *testing.T) {
 			t.Errorf("expected topic wildcard.match, got %v", eventResp["topic"])
 		}
 	})
+
+	t.Run("standalone * matches single-segment topic", func(t *testing.T) {
+		// Connect WebSocket
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect: %v", err)
+		}
+		defer conn.Close()
+
+		// Subscribe with standalone * wildcard (should match ALL topics)
+		subscribeMsg := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"*"},
+			"options": map[string]interface{}{
+				"auto_ack": true,
+			},
+		}
+		if err := conn.WriteJSON(subscribeMsg); err != nil {
+			t.Fatalf("failed to send subscribe: %v", err)
+		}
+
+		// Wait for subscribed confirmation
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var subResp map[string]interface{}
+		if err := conn.ReadJSON(&subResp); err != nil {
+			t.Fatalf("failed to read subscribed response: %v", err)
+		}
+		if subResp["type"] != "subscribed" {
+			t.Fatalf("expected subscribed, got %v", subResp["type"])
+		}
+
+		// Emit a single-segment topic event
+		payload := `{"topic": "orders", "data": {"single_segment": true}}`
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+		resp, _ := http.DefaultClient.Do(req)
+		resp.Body.Close()
+
+		// Should receive the event
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var eventResp map[string]interface{}
+		if err := conn.ReadJSON(&eventResp); err != nil {
+			t.Fatalf("failed to read event: %v", err)
+		}
+
+		if eventResp["type"] != "event" {
+			t.Errorf("expected type event, got %v", eventResp["type"])
+		}
+		if eventResp["topic"] != "orders" {
+			t.Errorf("expected topic orders, got %v", eventResp["topic"])
+		}
+	})
+
+	t.Run("standalone * matches multi-segment topic", func(t *testing.T) {
+		// Connect WebSocket
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect: %v", err)
+		}
+		defer conn.Close()
+
+		// Subscribe with standalone * wildcard (should match ALL topics including multi-segment)
+		subscribeMsg := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"*"},
+			"options": map[string]interface{}{
+				"auto_ack": true,
+			},
+		}
+		if err := conn.WriteJSON(subscribeMsg); err != nil {
+			t.Fatalf("failed to send subscribe: %v", err)
+		}
+
+		// Wait for subscribed confirmation
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var subResp map[string]interface{}
+		if err := conn.ReadJSON(&subResp); err != nil {
+			t.Fatalf("failed to read subscribed response: %v", err)
+		}
+		if subResp["type"] != "subscribed" {
+			t.Fatalf("expected subscribed, got %v", subResp["type"])
+		}
+
+		// Emit a multi-segment topic event (this was the bug - standalone * didn't match these)
+		payload := `{"topic": "orders.created", "data": {"multi_segment": true}}`
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+		resp, _ := http.DefaultClient.Do(req)
+		resp.Body.Close()
+
+		// Should receive the event (this is the key test for the bug fix)
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var eventResp map[string]interface{}
+		if err := conn.ReadJSON(&eventResp); err != nil {
+			t.Fatalf("failed to read event: %v (this was the bug - standalone * should match multi-segment topics)", err)
+		}
+
+		if eventResp["type"] != "event" {
+			t.Errorf("expected type event, got %v", eventResp["type"])
+		}
+		if eventResp["topic"] != "orders.created" {
+			t.Errorf("expected topic orders.created, got %v", eventResp["topic"])
+		}
+	})
+
+	t.Run("standalone * matches deeply nested topic", func(t *testing.T) {
+		// Connect WebSocket
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect: %v", err)
+		}
+		defer conn.Close()
+
+		// Subscribe with standalone * wildcard
+		subscribeMsg := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"*"},
+			"options": map[string]interface{}{
+				"auto_ack": true,
+			},
+		}
+		if err := conn.WriteJSON(subscribeMsg); err != nil {
+			t.Fatalf("failed to send subscribe: %v", err)
+		}
+
+		// Wait for subscribed confirmation
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var subResp map[string]interface{}
+		if err := conn.ReadJSON(&subResp); err != nil {
+			t.Fatalf("failed to read subscribed response: %v", err)
+		}
+		if subResp["type"] != "subscribed" {
+			t.Fatalf("expected subscribed, got %v", subResp["type"])
+		}
+
+		// Emit a deeply nested topic event
+		payload := `{"topic": "system.users.auth.login.success", "data": {"deeply_nested": true}}`
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+		resp, _ := http.DefaultClient.Do(req)
+		resp.Body.Close()
+
+		// Should receive the event
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var eventResp map[string]interface{}
+		if err := conn.ReadJSON(&eventResp); err != nil {
+			t.Fatalf("failed to read event: %v", err)
+		}
+
+		if eventResp["type"] != "event" {
+			t.Errorf("expected type event, got %v", eventResp["type"])
+		}
+		if eventResp["topic"] != "system.users.auth.login.success" {
+			t.Errorf("expected topic system.users.auth.login.success, got %v", eventResp["topic"])
+		}
+	})
+
+	t.Run("partial wildcard prefix.* still works correctly", func(t *testing.T) {
+		// Connect WebSocket
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect: %v", err)
+		}
+		defer conn.Close()
+
+		// Subscribe with partial wildcard (should still work as before)
+		subscribeMsg := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"partial.*"},
+			"options": map[string]interface{}{
+				"auto_ack": true,
+			},
+		}
+		if err := conn.WriteJSON(subscribeMsg); err != nil {
+			t.Fatalf("failed to send subscribe: %v", err)
+		}
+
+		// Wait for subscribed confirmation
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var subResp map[string]interface{}
+		if err := conn.ReadJSON(&subResp); err != nil {
+			t.Fatalf("failed to read subscribed response: %v", err)
+		}
+		if subResp["type"] != "subscribed" {
+			t.Fatalf("expected subscribed, got %v", subResp["type"])
+		}
+
+		// Emit matching event
+		payload := `{"topic": "partial.test", "data": {"partial_wildcard": true}}`
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+		resp, _ := http.DefaultClient.Do(req)
+		resp.Body.Close()
+
+		// Should receive the event
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var eventResp map[string]interface{}
+		if err := conn.ReadJSON(&eventResp); err != nil {
+			t.Fatalf("failed to read event: %v", err)
+		}
+
+		if eventResp["type"] != "event" {
+			t.Errorf("expected type event, got %v", eventResp["type"])
+		}
+		if eventResp["topic"] != "partial.test" {
+			t.Errorf("expected topic partial.test, got %v", eventResp["topic"])
+		}
+	})
 }
 
 func TestWebhooksCRUD(t *testing.T) {
