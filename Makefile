@@ -12,12 +12,17 @@ build-cli:
 build-all: build build-cli
 
 # Run locally (requires dev services running)
+# Load .env file if it exists (for CLERK_SECRET_KEY, etc.)
 run: build
-	DATABASE_URL="postgres://notif:notif_dev@localhost:5432/notif?sslmode=disable" \
-	NATS_URL="nats://localhost:4222" \
-	LOG_LEVEL=debug \
-	LOG_FORMAT=text \
-	./bin/notifd
+	@if [ -f .env ]; then \
+		set -a && . ./.env && set +a && ./bin/notifd; \
+	else \
+		DATABASE_URL="postgres://notif:notif_dev@localhost:5432/notif?sslmode=disable" \
+		NATS_URL="nats://localhost:4222" \
+		LOG_LEVEL=debug \
+		LOG_FORMAT=text \
+		./bin/notifd; \
+	fi
 
 # Run unit tests
 test:

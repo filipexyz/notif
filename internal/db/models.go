@@ -45,6 +45,7 @@ type Webhook struct {
 	Enabled   bool               `json:"enabled"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	OrgID     pgtype.Text        `json:"org_id"`
 }
 
 type WebhookDelivery struct {

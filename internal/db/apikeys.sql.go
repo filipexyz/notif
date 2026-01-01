@@ -85,6 +85,37 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKe
 	return i, err
 }
 
+const getAPIKeyByID = `-- name: GetAPIKeyByID :one
+SELECT id, key_prefix, name, rate_limit_per_second, revoked_at, created_at, org_id
+FROM api_keys
+WHERE id = $1
+`
+
+type GetAPIKeyByIDRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	KeyPrefix          string             `json:"key_prefix"`
+	Name               pgtype.Text        `json:"name"`
+	RateLimitPerSecond pgtype.Int4        `json:"rate_limit_per_second"`
+	RevokedAt          pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	OrgID              pgtype.Text        `json:"org_id"`
+}
+
+func (q *Queries) GetAPIKeyByID(ctx context.Context, id pgtype.UUID) (GetAPIKeyByIDRow, error) {
+	row := q.db.QueryRow(ctx, getAPIKeyByID, id)
+	var i GetAPIKeyByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.KeyPrefix,
+		&i.Name,
+		&i.RateLimitPerSecond,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.OrgID,
+	)
+	return i, err
+}
+
 const getAPIKeyByIdAndOrg = `-- name: GetAPIKeyByIdAndOrg :one
 SELECT id, key_prefix, name, rate_limit_per_second, revoked_at, created_at, org_id
 FROM api_keys

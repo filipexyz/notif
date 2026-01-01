@@ -63,17 +63,23 @@ func UnifiedAuth(queries *db.Queries) func(http.Handler) http.Handler {
 
 			// 2. Try Clerk session
 			claims, ok := clerk.SessionClaimsFromContext(r.Context())
-			if ok && claims.ActiveOrganizationID != "" {
+			if ok && claims.Subject != "" {
 				userID := claims.Subject
+				// Use org ID if available, otherwise fall back to user ID for personal accounts
+				orgID := claims.ActiveOrganizationID
+				if orgID == "" {
+					orgID = claims.Subject // personal account uses user_xxx as org
+				}
+
 				authCtx = &AuthContext{
-					OrgID:  claims.ActiveOrganizationID,
+					OrgID:  orgID,
 					UserID: &userID,
 				}
 
 				// Store clerk session for handlers that need it
 				session := &ClerkSession{
 					UserID: claims.Subject,
-					OrgID:  claims.ActiveOrganizationID,
+					OrgID:  orgID,
 				}
 				ctx := context.WithValue(r.Context(), clerkSessionKey, session)
 				ctx = context.WithValue(ctx, authCtxKey, authCtx)

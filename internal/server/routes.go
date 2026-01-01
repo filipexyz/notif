@@ -3,12 +3,14 @@ package server
 import (
 	"net/http"
 
+	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/handler"
 	"github.com/filipexyz/notif/internal/middleware"
 	"github.com/filipexyz/notif/internal/nats"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 )
 
 func (s *Server) routes() http.Handler {
@@ -19,6 +21,21 @@ func (s *Server) routes() http.Handler {
 	r.Use(chimw.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(chimw.Recoverer)
+
+	// Clerk JWT parsing (non-blocking - just parses if present)
+	// Also handles query param 'token' for WebSocket connections
+	r.Use(middleware.ClerkQueryParamAuth())
+	r.Use(clerkhttp.WithHeaderAuthorization())
+
+	// CORS for frontend development
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:5173"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 
 	// Health checks (no auth)
 	healthHandler := handler.NewHealthHandler(s.db, s.nats)

@@ -21,8 +21,8 @@ type APIKey struct {
 	OrgID              string
 }
 
-// keyRegex matches: nsh_[a-zA-Z0-9]{20}
-var keyRegex = regexp.MustCompile(`^nsh_[a-zA-Z0-9]{20}$`)
+// keyRegex matches: nsh_[a-zA-Z0-9]{28} (32 chars total, like Stripe)
+var keyRegex = regexp.MustCompile(`^nsh_[a-zA-Z0-9]{28}$`)
 
 // ValidateKeyFormat checks if the key matches the expected format.
 func ValidateKeyFormat(key string) bool {
@@ -38,16 +38,16 @@ func HashKey(key string) string {
 // GenerateAPIKey creates a new API key.
 // Returns: full key, prefix (for display), hash (for storage)
 func GenerateAPIKey() (fullKey string, prefix string, hash string) {
-	// Generate 20 random alphanumeric characters
+	// Generate 28 random alphanumeric characters (32 total with nsh_ prefix)
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, 20)
+	b := make([]byte, 28)
 	rand.Read(b)
 	for i := range b {
 		b[i] = chars[int(b[i])%len(chars)]
 	}
 
 	fullKey = "nsh_" + string(b)
-	prefix = fullKey[:12] // "nsh_abc12345"
+	prefix = fullKey[:16] // "nsh_abc1234567890"
 	hash = HashKey(fullKey)
 	return
 }

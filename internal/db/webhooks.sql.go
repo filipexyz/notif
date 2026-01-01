@@ -12,21 +12,21 @@ import (
 )
 
 const createWebhook = `-- name: CreateWebhook :one
-INSERT INTO webhooks (api_key_id, url, topics, secret)
+INSERT INTO webhooks (org_id, url, topics, secret)
 VALUES ($1, $2, $3, $4)
-RETURNING id, api_key_id, url, topics, secret, enabled, created_at, updated_at
+RETURNING id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id
 `
 
 type CreateWebhookParams struct {
-	ApiKeyID pgtype.UUID `json:"api_key_id"`
-	Url      string      `json:"url"`
-	Topics   []string    `json:"topics"`
-	Secret   string      `json:"secret"`
+	OrgID  pgtype.Text `json:"org_id"`
+	Url    string      `json:"url"`
+	Topics []string    `json:"topics"`
+	Secret string      `json:"secret"`
 }
 
 func (q *Queries) CreateWebhook(ctx context.Context, arg CreateWebhookParams) (Webhook, error) {
 	row := q.db.QueryRow(ctx, createWebhook,
-		arg.ApiKeyID,
+		arg.OrgID,
 		arg.Url,
 		arg.Topics,
 		arg.Secret,
@@ -41,6 +41,7 @@ func (q *Queries) CreateWebhook(ctx context.Context, arg CreateWebhookParams) (W
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
@@ -86,7 +87,7 @@ func (q *Queries) DeleteWebhook(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getEnabledWebhooks = `-- name: GetEnabledWebhooks :many
-SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at FROM webhooks
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks
 WHERE enabled = true
 ORDER BY created_at
 `
@@ -109,6 +110,43 @@ func (q *Queries) GetEnabledWebhooks(ctx context.Context) ([]Webhook, error) {
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.OrgID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getEnabledWebhooksByOrg = `-- name: GetEnabledWebhooksByOrg :many
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks
+WHERE org_id = $1 AND enabled = true
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetEnabledWebhooksByOrg(ctx context.Context, orgID pgtype.Text) ([]Webhook, error) {
+	rows, err := q.db.Query(ctx, getEnabledWebhooksByOrg, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Webhook{}
+	for rows.Next() {
+		var i Webhook
+		if err := rows.Scan(
+			&i.ID,
+			&i.ApiKeyID,
+			&i.Url,
+			&i.Topics,
+			&i.Secret,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -180,7 +218,7 @@ func (q *Queries) GetPendingDeliveries(ctx context.Context, limit int32) ([]GetP
 }
 
 const getWebhook = `-- name: GetWebhook :one
-SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at FROM webhooks WHERE id = $1
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks WHERE id = $1
 `
 
 func (q *Queries) GetWebhook(ctx context.Context, id pgtype.UUID) (Webhook, error) {
@@ -195,6 +233,7 @@ func (q *Queries) GetWebhook(ctx context.Context, id pgtype.UUID) (Webhook, erro
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
@@ -244,7 +283,7 @@ func (q *Queries) GetWebhookDeliveries(ctx context.Context, arg GetWebhookDelive
 }
 
 const getWebhooksByAPIKey = `-- name: GetWebhooksByAPIKey :many
-SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at FROM webhooks
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks
 WHERE api_key_id = $1
 ORDER BY created_at DESC
 `
@@ -267,6 +306,43 @@ func (q *Queries) GetWebhooksByAPIKey(ctx context.Context, apiKeyID pgtype.UUID)
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.OrgID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getWebhooksByOrg = `-- name: GetWebhooksByOrg :many
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks
+WHERE org_id = $1
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetWebhooksByOrg(ctx context.Context, orgID pgtype.Text) ([]Webhook, error) {
+	rows, err := q.db.Query(ctx, getWebhooksByOrg, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Webhook{}
+	for rows.Next() {
+		var i Webhook
+		if err := rows.Scan(
+			&i.ID,
+			&i.ApiKeyID,
+			&i.Url,
+			&i.Topics,
+			&i.Secret,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -282,7 +358,7 @@ const updateWebhook = `-- name: UpdateWebhook :one
 UPDATE webhooks
 SET url = $2, topics = $3, enabled = $4, updated_at = NOW()
 WHERE id = $1
-RETURNING id, api_key_id, url, topics, secret, enabled, created_at, updated_at
+RETURNING id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id
 `
 
 type UpdateWebhookParams struct {
@@ -309,6 +385,7 @@ func (q *Queries) UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) (W
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }

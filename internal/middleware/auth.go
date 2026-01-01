@@ -91,6 +91,22 @@ func extractBearerToken(r *http.Request) string {
 	return parts[1]
 }
 
+// ClerkQueryParamAuth moves query param 'token' to Authorization header
+// for WebSocket connections so Clerk middleware can process it.
+func ClerkQueryParamAuth() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// If no Authorization header but token query param exists, move it
+			if r.Header.Get("Authorization") == "" {
+				if token := r.URL.Query().Get("token"); token != "" {
+					r.Header.Set("Authorization", "Bearer "+token)
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func hashKey(key string) string {
 	h := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(h[:])

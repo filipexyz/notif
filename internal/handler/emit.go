@@ -56,8 +56,12 @@ func (h *EmitHandler) Emit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create event
+	// Create event with org context
 	event := domain.NewEvent(req.Topic, req.Data)
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx != nil {
+		event.OrgID = authCtx.OrgID
+	}
 
 	// Publish to NATS
 	if err := h.publisher.Publish(r.Context(), event); err != nil {

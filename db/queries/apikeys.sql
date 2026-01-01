@@ -3,6 +3,11 @@ SELECT id, key_prefix, name, rate_limit_per_second, revoked_at, created_at, org_
 FROM api_keys
 WHERE key_hash = $1 AND revoked_at IS NULL;
 
+-- name: GetAPIKeyByID :one
+SELECT id, key_prefix, name, rate_limit_per_second, revoked_at, created_at, org_id
+FROM api_keys
+WHERE id = $1;
+
 -- name: UpdateAPIKeyLastUsed :exec
 UPDATE api_keys SET last_used_at = NOW() WHERE id = $1;
 

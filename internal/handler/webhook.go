@@ -56,8 +56,8 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiKey := middleware.GetAPIKey(r.Context())
-	if apiKey == nil {
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -66,10 +66,10 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	secret := generateSecret()
 
 	webhook, err := h.queries.CreateWebhook(r.Context(), db.CreateWebhookParams{
-		ApiKeyID: apiKey.ID,
-		Url:      req.URL,
-		Topics:   req.Topics,
-		Secret:   secret,
+		OrgID:  pgtype.Text{String: authCtx.OrgID, Valid: true},
+		Url:    req.URL,
+		Topics: req.Topics,
+		Secret: secret,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create webhook"})
@@ -86,15 +86,15 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// List lists all webhooks for the authenticated API key.
+// List lists all webhooks for the authenticated organization.
 func (h *WebhookHandler) List(w http.ResponseWriter, r *http.Request) {
-	apiKey := middleware.GetAPIKey(r.Context())
-	if apiKey == nil {
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	webhooks, err := h.queries.GetWebhooksByAPIKey(r.Context(), apiKey.ID)
+	webhooks, err := h.queries.GetWebhooksByOrg(r.Context(), pgtype.Text{String: authCtx.OrgID, Valid: true})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list webhooks"})
 		return
@@ -126,15 +126,14 @@ func (h *WebhookHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	// Verify ownership
-	apiKey := middleware.GetAPIKey(r.Context())
-	if apiKey == nil || webhook.ApiKeyID != apiKey.ID {
+	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
+	if err != nil || webhook.OrgID.String != authCtx.OrgID {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
 		return
 	}
@@ -164,16 +163,15 @@ func (h *WebhookHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get existing webhook
-	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	// Verify ownership
-	apiKey := middleware.GetAPIKey(r.Context())
-	if apiKey == nil || webhook.ApiKeyID != apiKey.ID {
+	// Get existing webhook
+	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
+	if err != nil || webhook.OrgID.String != authCtx.OrgID {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
 		return
 	}
@@ -227,15 +225,15 @@ func (h *WebhookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get existing webhook to verify ownership
-	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	apiKey := middleware.GetAPIKey(r.Context())
-	if apiKey == nil || webhook.ApiKeyID != apiKey.ID {
+	// Get existing webhook to verify ownership
+	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
+	if err != nil || webhook.OrgID.String != authCtx.OrgID {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
 		return
 	}
@@ -257,15 +255,15 @@ func (h *WebhookHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify ownership
-	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	apiKey := middleware.GetAPIKey(r.Context())
-	if apiKey == nil || webhook.ApiKeyID != apiKey.ID {
+	// Verify ownership
+	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
+	if err != nil || webhook.OrgID.String != authCtx.OrgID {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
 		return
 	}

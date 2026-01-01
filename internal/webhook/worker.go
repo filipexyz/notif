@@ -82,9 +82,14 @@ func (w *Worker) processMessage(ctx context.Context, msg jetstream.Msg) {
 		return
 	}
 
-	// Get enabled webhooks
-	// TODO: Cache webhooks and refresh periodically
-	webhooks, err := w.queries.GetEnabledWebhooks(ctx)
+	// Get webhooks for this org
+	if event.OrgID == "" {
+		slog.Warn("webhook: event has no org_id, skipping", "event_id", event.ID)
+		msg.Ack()
+		return
+	}
+
+	webhooks, err := w.queries.GetEnabledWebhooksByOrg(ctx, pgtype.Text{String: event.OrgID, Valid: true})
 	if err != nil {
 		slog.Error("webhook: failed to get webhooks", "error", err)
 		msg.NakWithDelay(time.Minute)
