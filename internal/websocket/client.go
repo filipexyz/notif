@@ -184,6 +184,7 @@ func (c *Client) handleSubscribe(ctx context.Context, msg *SubscribeMessage, con
 	opts.OrgID = c.orgID
 	opts.AutoAck = msg.Options.AutoAck
 	opts.Group = msg.Options.Group
+	opts.From = msg.Options.From
 
 	if msg.Options.MaxRetries > 0 {
 		opts.MaxRetries = msg.Options.MaxRetries

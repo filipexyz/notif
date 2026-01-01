@@ -1495,3 +1495,229 @@ func TestWebhooksValidation(t *testing.T) {
 		}
 	})
 }
+
+func TestWebSocketFromOption(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer env.Cleanup(t)
+
+	wsURL := strings.Replace(env.ServerURL, "http://", "ws://", 1)
+
+	t.Run("from latest only receives new events", func(t *testing.T) {
+		// First, emit some historical events before subscribing
+		for i := 0; i < 3; i++ {
+			payload := `{"topic": "from-test.historical", "data": {"index": ` + strconv.Itoa(i) + `}}`
+			req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("emit request failed: %v", err)
+			}
+			resp.Body.Close()
+		}
+
+		// Small delay to ensure events are stored
+		time.Sleep(100 * time.Millisecond)
+
+		// Connect WebSocket with from: "latest"
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect: %v", err)
+		}
+		defer conn.Close()
+
+		// Subscribe with from: "latest" (default)
+		subscribeMsg := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"from-test.*"},
+			"options": map[string]interface{}{
+				"auto_ack": true,
+				"from":     "latest",
+			},
+		}
+		if err := conn.WriteJSON(subscribeMsg); err != nil {
+			t.Fatalf("failed to send subscribe: %v", err)
+		}
+
+		// Wait for subscribed confirmation
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var subResp map[string]interface{}
+		if err := conn.ReadJSON(&subResp); err != nil {
+			t.Fatalf("failed to read subscribed response: %v", err)
+		}
+		if subResp["type"] != "subscribed" {
+			t.Fatalf("expected subscribed, got %v", subResp["type"])
+		}
+
+		// Emit a new event after subscribing
+		payload := `{"topic": "from-test.new", "data": {"new": true}}`
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+		resp, _ := http.DefaultClient.Do(req)
+		resp.Body.Close()
+
+		// Should receive only the new event, not historical ones
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var eventResp map[string]interface{}
+		if err := conn.ReadJSON(&eventResp); err != nil {
+			t.Fatalf("failed to read event: %v", err)
+		}
+
+		if eventResp["type"] != "event" {
+			t.Errorf("expected type event, got %v", eventResp["type"])
+		}
+		if eventResp["topic"] != "from-test.new" {
+			t.Errorf("expected topic from-test.new, got %v", eventResp["topic"])
+		}
+
+		// Verify we got the new event, not historical
+		data := eventResp["data"].(map[string]interface{})
+		if data["new"] != true {
+			t.Errorf("expected new event data, got %v", data)
+		}
+	})
+
+	t.Run("from beginning receives historical events", func(t *testing.T) {
+		// First, emit some historical events before subscribing
+		for i := 0; i < 3; i++ {
+			payload := `{"topic": "beginning-test.historical", "data": {"index": ` + strconv.Itoa(i) + `}}`
+			req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("emit request failed: %v", err)
+			}
+			resp.Body.Close()
+		}
+
+		// Small delay to ensure events are stored
+		time.Sleep(100 * time.Millisecond)
+
+		// Connect WebSocket with from: "beginning"
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect: %v", err)
+		}
+		defer conn.Close()
+
+		// Subscribe with from: "beginning"
+		subscribeMsg := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"beginning-test.*"},
+			"options": map[string]interface{}{
+				"auto_ack": true,
+				"from":     "beginning",
+			},
+		}
+		if err := conn.WriteJSON(subscribeMsg); err != nil {
+			t.Fatalf("failed to send subscribe: %v", err)
+		}
+
+		// Wait for subscribed confirmation
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var subResp map[string]interface{}
+		if err := conn.ReadJSON(&subResp); err != nil {
+			t.Fatalf("failed to read subscribed response: %v", err)
+		}
+		if subResp["type"] != "subscribed" {
+			t.Fatalf("expected subscribed, got %v", subResp["type"])
+		}
+
+		// Should receive historical events
+		receivedEvents := make([]map[string]interface{}, 0)
+		for i := 0; i < 3; i++ {
+			conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			var eventResp map[string]interface{}
+			if err := conn.ReadJSON(&eventResp); err != nil {
+				t.Fatalf("failed to read event %d: %v", i, err)
+			}
+			if eventResp["type"] != "event" {
+				t.Errorf("expected type event, got %v", eventResp["type"])
+			}
+			receivedEvents = append(receivedEvents, eventResp)
+		}
+
+		// Verify we received all 3 historical events
+		if len(receivedEvents) != 3 {
+			t.Errorf("expected 3 historical events, got %d", len(receivedEvents))
+		}
+
+		// Verify all events are from the beginning-test topic
+		for _, event := range receivedEvents {
+			if event["topic"] != "beginning-test.historical" {
+				t.Errorf("expected topic beginning-test.historical, got %v", event["topic"])
+			}
+		}
+	})
+
+	t.Run("empty from defaults to latest behavior", func(t *testing.T) {
+		// First, emit some historical events before subscribing
+		for i := 0; i < 2; i++ {
+			payload := `{"topic": "empty-from-test.historical", "data": {"index": ` + strconv.Itoa(i) + `}}`
+			req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("emit request failed: %v", err)
+			}
+			resp.Body.Close()
+		}
+
+		// Small delay to ensure events are stored
+		time.Sleep(100 * time.Millisecond)
+
+		// Connect WebSocket with empty from (should default to latest)
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/ws?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect: %v", err)
+		}
+		defer conn.Close()
+
+		// Subscribe without specifying from (should default to latest)
+		subscribeMsg := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"empty-from-test.*"},
+			"options": map[string]interface{}{
+				"auto_ack": true,
+			},
+		}
+		if err := conn.WriteJSON(subscribeMsg); err != nil {
+			t.Fatalf("failed to send subscribe: %v", err)
+		}
+
+		// Wait for subscribed confirmation
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var subResp map[string]interface{}
+		if err := conn.ReadJSON(&subResp); err != nil {
+			t.Fatalf("failed to read subscribed response: %v", err)
+		}
+		if subResp["type"] != "subscribed" {
+			t.Fatalf("expected subscribed, got %v", subResp["type"])
+		}
+
+		// Emit a new event after subscribing
+		payload := `{"topic": "empty-from-test.new", "data": {"new": true}}`
+		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+		resp, _ := http.DefaultClient.Do(req)
+		resp.Body.Close()
+
+		// Should receive only the new event, not historical ones
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var eventResp map[string]interface{}
+		if err := conn.ReadJSON(&eventResp); err != nil {
+			t.Fatalf("failed to read event: %v", err)
+		}
+
+		if eventResp["type"] != "event" {
+			t.Errorf("expected type event, got %v", eventResp["type"])
+		}
+		if eventResp["topic"] != "empty-from-test.new" {
+			t.Errorf("expected topic empty-from-test.new, got %v", eventResp["topic"])
+		}
+	})
+}

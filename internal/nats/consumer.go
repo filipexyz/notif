@@ -16,6 +16,7 @@ type SubscriptionOptions struct {
 	AutoAck    bool
 	MaxRetries int
 	AckTimeout time.Duration
+	From       string // "latest" (default), "beginning", or timestamp
 }
 
 // DefaultSubscriptionOptions returns sensible defaults.
@@ -62,12 +63,34 @@ func (cm *ConsumerManager) CreateConsumer(ctx context.Context, opts Subscription
 		}
 	}
 
+	// Determine deliver policy based on From option
+	deliverPolicy := jetstream.DeliverNewPolicy // Default: only new messages
+	var optStartTime time.Time
+	switch opts.From {
+	case "", "latest":
+		deliverPolicy = jetstream.DeliverNewPolicy
+	case "beginning":
+		deliverPolicy = jetstream.DeliverAllPolicy
+	default:
+		// Try to parse as timestamp (RFC3339)
+		if t, err := time.Parse(time.RFC3339, opts.From); err == nil {
+			deliverPolicy = jetstream.DeliverByStartTimePolicy
+			optStartTime = t
+		}
+		// If parsing fails, default to DeliverNewPolicy (latest)
+	}
+
 	config := jetstream.ConsumerConfig{
 		AckPolicy:      jetstream.AckExplicitPolicy,
 		AckWait:        opts.AckTimeout,
 		MaxDeliver:     opts.MaxRetries + 1,
 		FilterSubjects: filterSubjects,
-		DeliverPolicy:  jetstream.DeliverNewPolicy, // Only deliver new messages, not historical
+		DeliverPolicy:  deliverPolicy,
+	}
+
+	// Set OptStartTime if using DeliverByStartTimePolicy
+	if deliverPolicy == jetstream.DeliverByStartTimePolicy {
+		config.OptStartTime = &optStartTime
 	}
 
 	if opts.Group != "" {
