@@ -5,18 +5,21 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/nats"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // EventsHandler handles event query operations.
 type EventsHandler struct {
-	reader *nats.EventReader
+	reader  *nats.EventReader
+	queries *db.Queries
 }
 
 // NewEventsHandler creates a new EventsHandler.
-func NewEventsHandler(reader *nats.EventReader) *EventsHandler {
-	return &EventsHandler{reader: reader}
+func NewEventsHandler(reader *nats.EventReader, queries *db.Queries) *EventsHandler {
+	return &EventsHandler{reader: reader, queries: queries}
 }
 
 // List returns historical events.
@@ -108,5 +111,66 @@ func (h *EventsHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		"first_time":  info.State.FirstTime,
 		"last_time":   info.State.LastTime,
 		"consumers":   info.State.Consumers,
+	})
+}
+
+// Deliveries returns all deliveries (webhooks and websocket) for a specific event.
+func (h *EventsHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
+	eventID := chi.URLParam(r, "id")
+	if eventID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "event id required"})
+		return
+	}
+
+	// Get unified deliveries with webhook URLs
+	deliveries, err := h.queries.GetEventDeliveriesWithWebhookURL(r.Context(), eventID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get deliveries"})
+		return
+	}
+
+	// Format for JSON response
+	results := make([]map[string]any, len(deliveries))
+	for i, d := range deliveries {
+		results[i] = map[string]any{
+			"id":            uuid.UUID(d.ID.Bytes).String(),
+			"event_id":      d.EventID,
+			"receiver_type": d.ReceiverType,
+			"status":        d.Status,
+			"attempt":       d.Attempt,
+			"created_at":    d.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
+		}
+
+		// Add receiver-specific fields
+		if d.ReceiverType == "webhook" {
+			if d.ReceiverID.Valid {
+				results[i]["receiver_id"] = uuid.UUID(d.ReceiverID.Bytes).String()
+			}
+			if d.WebhookUrl.Valid {
+				results[i]["webhook_url"] = d.WebhookUrl.String
+			}
+		} else {
+			if d.ConsumerName.Valid {
+				results[i]["consumer_name"] = d.ConsumerName.String
+			}
+			if d.ClientID.Valid {
+				results[i]["client_id"] = d.ClientID.String
+			}
+		}
+
+		if d.DeliveredAt.Valid {
+			results[i]["delivered_at"] = d.DeliveredAt.Time.Format("2006-01-02T15:04:05Z")
+		}
+		if d.AckedAt.Valid {
+			results[i]["acked_at"] = d.AckedAt.Time.Format("2006-01-02T15:04:05Z")
+		}
+		if d.Error.Valid {
+			results[i]["error"] = d.Error.String
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"deliveries": results,
+		"count":      len(results),
 	})
 }

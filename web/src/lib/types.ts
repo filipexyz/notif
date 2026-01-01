@@ -69,10 +69,11 @@ export type Stats = {
   dlq_count: number
 }
 
-// Webhook Delivery
+// Webhook Delivery (legacy, for webhook-specific views)
 export type WebhookDelivery = {
   id: string
   webhook_id: string
+  webhook_url?: string
   event_id: string
   topic: string
   status: 'pending' | 'success' | 'failed'
@@ -82,4 +83,21 @@ export type WebhookDelivery = {
   error?: string
   created_at: string
   delivered_at?: string
+}
+
+// Unified Event Delivery (all receiver types)
+export type EventDelivery = {
+  id: string
+  event_id: string
+  receiver_type: 'webhook' | 'websocket'
+  receiver_id?: string       // For webhooks
+  consumer_name?: string     // For websocket
+  client_id?: string         // For websocket
+  webhook_url?: string       // Populated for webhooks
+  status: 'pending' | 'delivered' | 'acked' | 'nacked' | 'dlq'
+  attempt: number
+  created_at: string
+  delivered_at?: string
+  acked_at?: string
+  error?: string
 }

@@ -58,3 +58,10 @@ SELECT * FROM webhook_deliveries
 WHERE webhook_id = $1
 ORDER BY created_at DESC
 LIMIT $2;
+
+-- name: GetDeliveriesByEventID :many
+SELECT wd.*, w.url as webhook_url
+FROM webhook_deliveries wd
+JOIN webhooks w ON w.id = wd.webhook_id
+WHERE wd.event_id = $1
+ORDER BY wd.created_at DESC;

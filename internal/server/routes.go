@@ -53,13 +53,13 @@ func (s *Server) routes() http.Handler {
 
 	consumerMgr := nats.NewConsumerManager(s.nats.Stream())
 	dlqPublisher := nats.NewDLQPublisher(s.nats.JetStream())
-	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr, dlqPublisher)
+	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr, dlqPublisher, queries)
 
 	dlqReader, _ := nats.NewDLQReader(s.nats.JetStream())
 	dlqHandler := handler.NewDLQHandler(dlqReader, publisher)
 
 	eventReader := nats.NewEventReader(s.nats.Stream())
-	eventsHandler := handler.NewEventsHandler(eventReader)
+	eventsHandler := handler.NewEventsHandler(eventReader, queries)
 
 	webhookHandler := handler.NewWebhookHandler(queries)
 	apiKeyHandler := handler.NewAPIKeyHandler(queries)
@@ -79,6 +79,7 @@ func (s *Server) routes() http.Handler {
 		r.Get("/events", eventsHandler.List)
 		r.Get("/events/stats", eventsHandler.Stats)
 		r.Get("/events/{seq}", eventsHandler.Get)
+		r.Get("/events/{id}/deliveries", eventsHandler.Deliveries)
 
 		// Webhooks
 		r.Post("/webhooks", webhookHandler.Create)

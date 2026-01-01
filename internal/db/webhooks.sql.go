@@ -86,6 +86,62 @@ func (q *Queries) DeleteWebhook(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const getDeliveriesByEventID = `-- name: GetDeliveriesByEventID :many
+SELECT wd.id, wd.webhook_id, wd.event_id, wd.topic, wd.status, wd.attempt, wd.response_status, wd.response_body, wd.error, wd.created_at, wd.delivered_at, w.url as webhook_url
+FROM webhook_deliveries wd
+JOIN webhooks w ON w.id = wd.webhook_id
+WHERE wd.event_id = $1
+ORDER BY wd.created_at DESC
+`
+
+type GetDeliveriesByEventIDRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	WebhookID      pgtype.UUID        `json:"webhook_id"`
+	EventID        string             `json:"event_id"`
+	Topic          string             `json:"topic"`
+	Status         string             `json:"status"`
+	Attempt        int32              `json:"attempt"`
+	ResponseStatus pgtype.Int4        `json:"response_status"`
+	ResponseBody   pgtype.Text        `json:"response_body"`
+	Error          pgtype.Text        `json:"error"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	DeliveredAt    pgtype.Timestamptz `json:"delivered_at"`
+	WebhookUrl     string             `json:"webhook_url"`
+}
+
+func (q *Queries) GetDeliveriesByEventID(ctx context.Context, eventID string) ([]GetDeliveriesByEventIDRow, error) {
+	rows, err := q.db.Query(ctx, getDeliveriesByEventID, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetDeliveriesByEventIDRow{}
+	for rows.Next() {
+		var i GetDeliveriesByEventIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WebhookID,
+			&i.EventID,
+			&i.Topic,
+			&i.Status,
+			&i.Attempt,
+			&i.ResponseStatus,
+			&i.ResponseBody,
+			&i.Error,
+			&i.CreatedAt,
+			&i.DeliveredAt,
+			&i.WebhookUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEnabledWebhooks = `-- name: GetEnabledWebhooks :many
 SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks
 WHERE enabled = true

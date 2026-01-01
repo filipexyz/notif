@@ -174,6 +174,15 @@ func (w *Worker) deliver(ctx context.Context, wh *db.Webhook, event *domain.Even
 }
 
 func (w *Worker) recordDelivery(ctx context.Context, webhookID pgtype.UUID, eventID, topic string, statusCode int, respBody, errMsg string) {
+	now := time.Now()
+
+	// Determine status
+	status := "success"
+	if errMsg != "" {
+		status = "failed"
+	}
+
+	// Create webhook-specific delivery record (with response details)
 	delivery, err := w.queries.CreateWebhookDelivery(ctx, db.CreateWebhookDeliveryParams{
 		WebhookID: webhookID,
 		EventID:   eventID,
@@ -182,12 +191,6 @@ func (w *Worker) recordDelivery(ctx context.Context, webhookID pgtype.UUID, even
 	if err != nil {
 		slog.Error("webhook: failed to record delivery", "error", err)
 		return
-	}
-
-	// Update with result
-	status := "success"
-	if errMsg != "" {
-		status = "failed"
 	}
 
 	var respStatus pgtype.Int4
@@ -207,7 +210,7 @@ func (w *Worker) recordDelivery(ctx context.Context, webhookID pgtype.UUID, even
 
 	var deliveredAt pgtype.Timestamptz
 	if status == "success" {
-		deliveredAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+		deliveredAt = pgtype.Timestamptz{Time: now, Valid: true}
 	}
 
 	w.queries.UpdateWebhookDelivery(ctx, db.UpdateWebhookDeliveryParams{
@@ -219,6 +222,24 @@ func (w *Worker) recordDelivery(ctx context.Context, webhookID pgtype.UUID, even
 		Error:          errorText,
 		DeliveredAt:    deliveredAt,
 	})
+
+	// Also create unified event_deliveries record for cross-receiver visibility
+	eventDeliveryStatus := "acked" // Webhook success = acked
+	if errMsg != "" {
+		eventDeliveryStatus = "nacked"
+	}
+
+	_, err = w.queries.CreateEventDelivery(ctx, db.CreateEventDeliveryParams{
+		EventID:      eventID,
+		ReceiverType: "webhook",
+		ReceiverID:   webhookID,
+		Status:       eventDeliveryStatus,
+		Attempt:      1,
+		DeliveredAt:  pgtype.Timestamptz{Time: now, Valid: true},
+	})
+	if err != nil {
+		slog.Warn("webhook: failed to create event delivery", "error", err, "event_id", eventID)
+	}
 }
 
 // WebhookPayload is the payload sent to webhook endpoints.

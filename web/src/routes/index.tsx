@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Send } from 'lucide-react'
+import { Send, Zap, Webhook, AlertTriangle, Key } from 'lucide-react'
 import { EventRow } from '../components/events/EventRow'
 import { EventDetail } from '../components/events/EventDetail'
 import { LiveIndicator } from '../components/events/LiveIndicator'
@@ -10,6 +10,13 @@ import { Button } from '../components/ui'
 import { useApi } from '../lib/api'
 import { useEventStream } from '../lib/websocket'
 import type { StoredEvent } from '../lib/types'
+
+type StatsOverview = {
+  events: { total: number }
+  webhooks: { total: number; enabled: number; success_rate_24h: number }
+  dlq: { pending: number }
+  api_keys: { total: number; active_24h: number }
+}
 
 // UI event format used in components
 export type UIEvent = {
@@ -62,6 +69,12 @@ function EventsPage() {
     }
   }
 
+  const { data: stats } = useQuery({
+    queryKey: ['stats'],
+    queryFn: () => api<StatsOverview>('/api/v1/stats/overview'),
+    refetchInterval: 30000, // Refresh every 30s
+  })
+
   const { data: eventsResponse, isLoading, error } = useQuery({
     queryKey: ['events'],
     queryFn: () => api<{ events: StoredEvent[]; count: number }>('/api/v1/events'),
@@ -108,6 +121,62 @@ function EventsPage() {
 
   return (
     <div className="h-full">
+      {/* Stats cards */}
+      <div className="p-4 grid grid-cols-4 gap-4 border-b border-neutral-200 bg-neutral-50">
+        <div className="bg-white border border-neutral-200 p-4">
+          <div className="flex items-center gap-2 text-neutral-500 mb-1">
+            <Zap className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase">Events</span>
+          </div>
+          <div className="text-2xl font-semibold text-neutral-900">
+            {stats?.events.total.toLocaleString() ?? '—'}
+          </div>
+        </div>
+
+        <div className="bg-white border border-neutral-200 p-4">
+          <div className="flex items-center gap-2 text-neutral-500 mb-1">
+            <Webhook className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase">Webhooks</span>
+          </div>
+          <div className="text-2xl font-semibold text-neutral-900">
+            {stats?.webhooks.enabled ?? '—'}
+            <span className="text-sm font-normal text-neutral-500 ml-1">
+              / {stats?.webhooks.total ?? 0}
+            </span>
+          </div>
+          {stats?.webhooks.success_rate_24h !== undefined && (
+            <div className="text-xs text-neutral-500 mt-1">
+              {(stats.webhooks.success_rate_24h * 100).toFixed(0)}% success rate
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white border border-neutral-200 p-4">
+          <div className="flex items-center gap-2 text-neutral-500 mb-1">
+            <AlertTriangle className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase">DLQ</span>
+          </div>
+          <div className={`text-2xl font-semibold ${stats?.dlq.pending ? 'text-error' : 'text-neutral-900'}`}>
+            {stats?.dlq.pending ?? '—'}
+          </div>
+        </div>
+
+        <div className="bg-white border border-neutral-200 p-4">
+          <div className="flex items-center gap-2 text-neutral-500 mb-1">
+            <Key className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase">API Keys</span>
+          </div>
+          <div className="text-2xl font-semibold text-neutral-900">
+            {stats?.api_keys.total ?? '—'}
+          </div>
+          {stats?.api_keys.active_24h !== undefined && (
+            <div className="text-xs text-neutral-500 mt-1">
+              {stats.api_keys.active_24h} active today
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Filter bar */}
       <div className="h-10 px-4 flex items-center justify-between border-b border-neutral-200 bg-white">
         <div className="flex items-center gap-2">

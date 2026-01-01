@@ -7,17 +7,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/domain"
 	"github.com/filipexyz/notif/internal/nats"
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
 // pendingMsg holds a NATS message and its metadata for DLQ handling.
 type pendingMsg struct {
-	msg     jetstream.Msg
-	event   *domain.Event
-	attempt int
+	msg        jetstream.Msg
+	event      *domain.Event
+	attempt    int
+	deliveryID pgtype.UUID // Tracks delivery in event_deliveries table
 }
 
 const (
@@ -33,11 +36,14 @@ type Client struct {
 	conn     *websocket.Conn
 	send     chan []byte
 	apiKeyID string
+	clientID string     // Unique client identifier for tracking
+	queries  *db.Queries // For delivery tracking
 
 	// Subscription state
 	mu              sync.RWMutex
 	consumer        jetstream.Consumer
 	consumerContext jetstream.ConsumeContext
+	consumerName    string // NATS consumer name for delivery tracking
 	pendingMessages map[string]*pendingMsg
 	autoAck         bool
 	maxRetries      int
@@ -46,12 +52,14 @@ type Client struct {
 }
 
 // NewClient creates a new WebSocket client.
-func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID string, dlqPublisher *nats.DLQPublisher) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID string, dlqPublisher *nats.DLQPublisher, queries *db.Queries, clientID string) *Client {
 	return &Client{
 		hub:             hub,
 		conn:            conn,
 		send:            make(chan []byte, 256),
 		apiKeyID:        apiKeyID,
+		clientID:        clientID,
+		queries:         queries,
 		pendingMessages: make(map[string]*pendingMsg),
 		maxRetries:      5,
 		dlqPublisher:    dlqPublisher,
@@ -203,18 +211,19 @@ func (c *Client) handleSubscribe(ctx context.Context, msg *SubscribeMessage, con
 		return
 	}
 
-	c.mu.Lock()
-	c.consumerContext = consCtx
-	c.mu.Unlock()
-
 	info, _ := consumer.Info(ctx)
 	consumerName := ""
 	if info != nil {
 		consumerName = info.Name
 	}
 
+	c.mu.Lock()
+	c.consumerContext = consCtx
+	c.consumerName = consumerName
+	c.mu.Unlock()
+
 	c.sendJSON(NewSubscribedMessage(msg.Topics, consumerName))
-	slog.Info("client subscribed", "topics", msg.Topics, "consumer", consumerName)
+	slog.Info("client subscribed", "topics", msg.Topics, "consumer", consumerName, "client_id", c.clientID)
 }
 
 func (c *Client) deliverMessage(msg jetstream.Msg) {
@@ -236,7 +245,29 @@ func (c *Client) deliverMessage(msg jetstream.Msg) {
 	c.mu.RLock()
 	autoAck := c.autoAck
 	maxRetries := c.maxRetries
+	consumerName := c.consumerName
 	c.mu.RUnlock()
+
+	// Track delivery in database
+	var deliveryID pgtype.UUID
+	if c.queries != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		delivery, err := c.queries.CreateEventDelivery(ctx, db.CreateEventDeliveryParams{
+			EventID:      event.ID,
+			ReceiverType: "websocket",
+			ConsumerName: pgtype.Text{String: consumerName, Valid: consumerName != ""},
+			ClientID:     pgtype.Text{String: c.clientID, Valid: c.clientID != ""},
+			Status:       "delivered",
+			Attempt:      int32(attempt),
+			DeliveredAt:  pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		})
+		cancel()
+		if err != nil {
+			slog.Warn("failed to track delivery", "error", err, "event_id", event.ID)
+		} else {
+			deliveryID = delivery.ID
+		}
+	}
 
 	// Send to client
 	eventMsg := NewEventMessage(event.ID, event.Topic, event.Data, event.Timestamp, attempt, maxRetries)
@@ -244,13 +275,20 @@ func (c *Client) deliverMessage(msg jetstream.Msg) {
 
 	if autoAck {
 		msg.Ack()
+		// Mark delivery as acked immediately for auto-ack mode
+		if c.queries != nil && deliveryID.Valid {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			c.queries.UpdateEventDeliveryAcked(ctx, deliveryID)
+			cancel()
+		}
 	} else {
 		// Store for manual ack with metadata for DLQ handling
 		c.mu.Lock()
 		c.pendingMessages[event.ID] = &pendingMsg{
-			msg:     msg,
-			event:   &event,
-			attempt: attempt,
+			msg:        msg,
+			event:      &event,
+			attempt:    attempt,
+			deliveryID: deliveryID,
 		}
 		c.mu.Unlock()
 	}
@@ -273,6 +311,13 @@ func (c *Client) handleAck(msg *AckMessage) {
 		slog.Error("failed to ack", "error", err, "event_id", msg.ID)
 		c.sendError("ACK_ERROR", "failed to acknowledge")
 		return
+	}
+
+	// Track ACK in database
+	if c.queries != nil && pending.deliveryID.Valid {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		c.queries.UpdateEventDeliveryAcked(ctx, pending.deliveryID)
+		cancel()
 	}
 
 	slog.Debug("event acked", "event_id", msg.ID)
@@ -299,6 +344,15 @@ func (c *Client) handleNack(msg *NackMessage) {
 		if err := pending.msg.Term(); err != nil {
 			slog.Error("failed to terminate message", "error", err, "event_id", msg.ID)
 		}
+		// Track DLQ in database
+		if c.queries != nil && pending.deliveryID.Valid {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			c.queries.UpdateEventDeliveryDLQ(ctx, db.UpdateEventDeliveryDLQParams{
+				ID:    pending.deliveryID,
+				Error: pgtype.Text{String: "max retries exceeded", Valid: true},
+			})
+			cancel()
+		}
 		slog.Info("event moved to DLQ", "event_id", msg.ID, "attempts", pending.attempt)
 		return
 	}
@@ -312,6 +366,16 @@ func (c *Client) handleNack(msg *NackMessage) {
 		slog.Error("failed to nack", "error", err, "event_id", msg.ID)
 		c.sendError("NACK_ERROR", "failed to negative acknowledge")
 		return
+	}
+
+	// Track NACK in database
+	if c.queries != nil && pending.deliveryID.Valid {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		c.queries.UpdateEventDeliveryNacked(ctx, db.UpdateEventDeliveryNackedParams{
+			ID:    pending.deliveryID,
+			Error: pgtype.Text{String: "nacked for retry", Valid: true},
+		})
+		cancel()
 	}
 
 	slog.Debug("event nacked", "event_id", msg.ID, "retry_in", delay)
@@ -331,10 +395,28 @@ func (c *Client) cleanup() {
 			// At max retries, move to DLQ
 			c.moveToDLQ(pending, c.group, "client disconnected at max retries")
 			pending.msg.Term()
+			// Track DLQ in database
+			if c.queries != nil && pending.deliveryID.Valid {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				c.queries.UpdateEventDeliveryDLQ(ctx, db.UpdateEventDeliveryDLQParams{
+					ID:    pending.deliveryID,
+					Error: pgtype.Text{String: "client disconnected at max retries", Valid: true},
+				})
+				cancel()
+			}
 			slog.Info("event moved to DLQ on disconnect", "event_id", pending.event.ID)
 		} else {
 			// Still has retries left, nack for redelivery
 			pending.msg.Nak()
+			// Track NACK in database
+			if c.queries != nil && pending.deliveryID.Valid {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				c.queries.UpdateEventDeliveryNacked(ctx, db.UpdateEventDeliveryNackedParams{
+					ID:    pending.deliveryID,
+					Error: pgtype.Text{String: "client disconnected", Valid: true},
+				})
+				cancel()
+			}
 		}
 	}
 	c.pendingMessages = nil

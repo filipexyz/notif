@@ -36,6 +36,21 @@ type Event struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type EventDelivery struct {
+	ID           pgtype.UUID        `json:"id"`
+	EventID      string             `json:"event_id"`
+	ReceiverType string             `json:"receiver_type"`
+	ReceiverID   pgtype.UUID        `json:"receiver_id"`
+	ConsumerName pgtype.Text        `json:"consumer_name"`
+	ClientID     pgtype.Text        `json:"client_id"`
+	Status       string             `json:"status"`
+	Attempt      int32              `json:"attempt"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	DeliveredAt  pgtype.Timestamptz `json:"delivered_at"`
+	AckedAt      pgtype.Timestamptz `json:"acked_at"`
+	Error        pgtype.Text        `json:"error"`
+}
+
 type Webhook struct {
 	ID        pgtype.UUID        `json:"id"`
 	ApiKeyID  pgtype.UUID        `json:"api_key_id"`

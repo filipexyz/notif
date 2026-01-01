@@ -2,9 +2,12 @@ package handler
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 
+	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/middleware"
 	"github.com/filipexyz/notif/internal/nats"
 	"github.com/filipexyz/notif/internal/websocket"
@@ -26,15 +29,24 @@ type SubscribeHandler struct {
 	hub          *websocket.Hub
 	consumerMgr  *nats.ConsumerManager
 	dlqPublisher *nats.DLQPublisher
+	queries      *db.Queries
 }
 
 // NewSubscribeHandler creates a new SubscribeHandler.
-func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, dlqPublisher *nats.DLQPublisher) *SubscribeHandler {
+func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, dlqPublisher *nats.DLQPublisher, queries *db.Queries) *SubscribeHandler {
 	return &SubscribeHandler{
 		hub:          hub,
 		consumerMgr:  consumerMgr,
 		dlqPublisher: dlqPublisher,
+		queries:      queries,
 	}
+}
+
+// generateClientID creates a unique client identifier.
+func generateClientID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return "ws_" + hex.EncodeToString(b)
 }
 
 // Subscribe upgrades HTTP to WebSocket and handles subscriptions.
@@ -51,8 +63,11 @@ func (h *SubscribeHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		apiKeyID = uuid.UUID(apiKey.ID.Bytes).String()
 	}
 
-	client := websocket.NewClient(h.hub, conn, apiKeyID, h.dlqPublisher)
+	clientID := generateClientID()
+	client := websocket.NewClient(h.hub, conn, apiKeyID, h.dlqPublisher, h.queries, clientID)
 	h.hub.Register(client)
+
+	slog.Info("websocket client connected", "client_id", clientID)
 
 	// Start read/write pumps with a fresh context (not the HTTP request context)
 	go client.WritePump()
