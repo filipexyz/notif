@@ -60,14 +60,17 @@ clean:
 	docker compose down -v
 
 # Run database migrations (requires: go install github.com/pressly/goose/v3/cmd/goose@latest)
+GOOSE := ~/go/bin/goose
+DB_URL := postgres://notif:notif_dev@localhost:5432/notif?sslmode=disable
+
 migrate:
-	goose -dir db/migrations postgres "postgres://notif:notif_dev@localhost:5432/notif?sslmode=disable" up
+	$(GOOSE) -dir db/migrations postgres "$(DB_URL)" up
 
 migrate-down:
-	goose -dir db/migrations postgres "postgres://notif:notif_dev@localhost:5432/notif?sslmode=disable" down
+	$(GOOSE) -dir db/migrations postgres "$(DB_URL)" down
 
 migrate-status:
-	goose -dir db/migrations postgres "postgres://notif:notif_dev@localhost:5432/notif?sslmode=disable" status
+	$(GOOSE) -dir db/migrations postgres "$(DB_URL)" status
 
 # Seed test data
 seed:
