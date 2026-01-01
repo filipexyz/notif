@@ -27,9 +27,9 @@ func (s *Server) routes() http.Handler {
 	r.Use(middleware.ClerkQueryParamAuth())
 	r.Use(clerkhttp.WithHeaderAuthorization())
 
-	// CORS for frontend development
+	// CORS
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:5173"},
+		AllowedOrigins:   s.cfg.CORSOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		ExposedHeaders:   []string{"Link"},

@@ -23,6 +23,9 @@ type Config struct {
 
 	// Clerk Authentication (for dashboard routes)
 	ClerkSecretKey string `env:"CLERK_SECRET_KEY"`
+
+	// CORS
+	CORSOrigins []string `env:"CORS_ORIGINS" envSeparator:"," envDefault:"http://localhost:3000,http://localhost:5173"`
 }
 
 func Load() (*Config, error) {
