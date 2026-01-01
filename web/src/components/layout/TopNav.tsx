@@ -1,6 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { UserButton } from "@clerk/tanstack-react-start";
-import { Command } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Events" },
@@ -11,10 +10,9 @@ const navItems = [
 
 interface TopNavProps {
   dlqCount?: number;
-  onCommandPalette?: () => void;
 }
 
-export function TopNav({ dlqCount = 0, onCommandPalette }: TopNavProps) {
+export function TopNav({ dlqCount = 0 }: TopNavProps) {
   const location = useLocation();
 
   return (
@@ -56,13 +54,6 @@ export function TopNav({ dlqCount = 0, onCommandPalette }: TopNavProps) {
 
         {/* Right side */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={onCommandPalette}
-            className="flex items-center gap-2 px-2 py-1 text-sm text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 border border-neutral-200"
-          >
-            <Command className="w-3 h-3" />
-            <span className="text-xs">K</span>
-          </button>
           <UserButton afterSignOutUrl="/" />
         </div>
       </div>
