@@ -23,7 +23,7 @@ export function TopNav({ dlqCount = 0, onCommandPalette }: TopNavProps) {
         {/* Logo */}
         <div className="flex items-center gap-8">
           <Link to="/" className="text-lg font-semibold text-neutral-900">
-            notif
+            notif.sh
           </Link>
 
           {/* Nav Links */}

@@ -18,7 +18,7 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'notif',
+        title: 'notif.sh',
       },
     ],
     links: [
@@ -65,7 +65,7 @@ function RootComponent() {
             <SignedOut>
               <div className="min-h-screen flex items-center justify-center bg-neutral-50">
                 <div className="text-center">
-                  <h1 className="text-2xl font-semibold text-neutral-900 mb-2">notif</h1>
+                  <h1 className="text-2xl font-semibold text-neutral-900 mb-2">notif.sh</h1>
                   <p className="text-neutral-500 mb-6">Managed pub/sub event hub</p>
                   <SignInButton mode="modal">
                     <button className="px-6 py-2.5 bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors">
