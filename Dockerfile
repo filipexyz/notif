@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o /notifd ./cmd/notifd
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/notifd ./cmd/notifd
 
 # Runtime stage
 FROM alpine:3.20
@@ -23,7 +23,7 @@ RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
-COPY --from=builder /notifd /app/notifd
+COPY --from=builder /app/notifd /app/notifd
 
 EXPOSE 8080
 
