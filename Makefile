@@ -1,8 +1,15 @@
-.PHONY: build run test generate dev dev-down clean seed
+.PHONY: build build-cli run test generate dev dev-down clean seed
 
-# Build the binary
+# Build the server binary
 build:
+	go build -o bin/notifd ./cmd/notifd
+
+# Build the CLI binary
+build-cli:
 	go build -o bin/notif ./cmd/notif
+
+# Build all binaries
+build-all: build build-cli
 
 # Run locally (requires dev services running)
 run: build
@@ -10,7 +17,7 @@ run: build
 	NATS_URL="nats://localhost:4222" \
 	LOG_LEVEL=debug \
 	LOG_FORMAT=text \
-	./bin/notif
+	./bin/notifd
 
 # Run unit tests
 test:
