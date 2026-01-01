@@ -23,15 +23,17 @@ var upgrader = ws.Upgrader{
 
 // SubscribeHandler handles WebSocket subscriptions.
 type SubscribeHandler struct {
-	hub         *websocket.Hub
-	consumerMgr *nats.ConsumerManager
+	hub          *websocket.Hub
+	consumerMgr  *nats.ConsumerManager
+	dlqPublisher *nats.DLQPublisher
 }
 
 // NewSubscribeHandler creates a new SubscribeHandler.
-func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager) *SubscribeHandler {
+func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, dlqPublisher *nats.DLQPublisher) *SubscribeHandler {
 	return &SubscribeHandler{
-		hub:         hub,
-		consumerMgr: consumerMgr,
+		hub:          hub,
+		consumerMgr:  consumerMgr,
+		dlqPublisher: dlqPublisher,
 	}
 }
 
@@ -51,7 +53,7 @@ func (h *SubscribeHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		env = apiKey.Environment
 	}
 
-	client := websocket.NewClient(h.hub, conn, apiKeyID, env)
+	client := websocket.NewClient(h.hub, conn, apiKeyID, env, h.dlqPublisher)
 	h.hub.Register(client)
 
 	// Start read/write pumps with a fresh context (not the HTTP request context)

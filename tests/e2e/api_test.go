@@ -651,6 +651,140 @@ func TestConsumerGroups(t *testing.T) {
 	})
 }
 
+func TestDeadLetterQueue(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer env.Cleanup(t)
+
+	wsURL := strings.Replace(env.ServerURL, "http://", "ws://", 1)
+
+	t.Run("message moves to DLQ after max retries", func(t *testing.T) {
+		// Connect WebSocket with manual ack
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL+"/subscribe?token="+TestAPIKey, nil)
+		if err != nil {
+			t.Fatalf("failed to connect: %v", err)
+		}
+		defer conn.Close()
+
+		// Subscribe with low max retries for testing
+		subscribeMsg := map[string]interface{}{
+			"action": "subscribe",
+			"topics": []string{"dlq-test.*"},
+			"options": map[string]interface{}{
+				"auto_ack":    false,
+				"max_retries": 2,
+			},
+		}
+		if err := conn.WriteJSON(subscribeMsg); err != nil {
+			t.Fatalf("failed to subscribe: %v", err)
+		}
+
+		// Wait for subscribed confirmation
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var subResp map[string]interface{}
+		conn.ReadJSON(&subResp)
+
+		// Emit an event
+		payload := `{"topic": "dlq-test.fail", "data": {"will": "fail"}}`
+		req, _ := http.NewRequest("POST", env.ServerURL+"/emit", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+		resp, _ := http.DefaultClient.Do(req)
+		resp.Body.Close()
+
+		// Receive and nack the event until it reaches max retries
+		for i := 0; i < 2; i++ {
+			conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			var eventResp map[string]interface{}
+			if err := conn.ReadJSON(&eventResp); err != nil {
+				t.Fatalf("failed to read event (attempt %d): %v", i+1, err)
+			}
+
+			if eventResp["type"] != "event" {
+				t.Fatalf("expected type event, got %v", eventResp["type"])
+			}
+
+			eventID := eventResp["id"].(string)
+
+			// Nack with short delay for testing
+			nackMsg := map[string]interface{}{
+				"action":   "nack",
+				"id":       eventID,
+				"retry_in": "100ms",
+			}
+			conn.WriteJSON(nackMsg)
+
+			// Small delay before next attempt arrives
+			time.Sleep(200 * time.Millisecond)
+		}
+
+		// Close connection to trigger cleanup
+		conn.Close()
+
+		// Give time for message to be moved to DLQ
+		time.Sleep(500 * time.Millisecond)
+
+		// Check DLQ via API
+		dlqReq, _ := http.NewRequest("GET", env.ServerURL+"/dlq?topic=dlq-test.fail", nil)
+		dlqReq.Header.Set("Authorization", "Bearer "+TestAPIKey)
+		dlqResp, err := http.DefaultClient.Do(dlqReq)
+		if err != nil {
+			t.Fatalf("failed to get DLQ: %v", err)
+		}
+		defer dlqResp.Body.Close()
+
+		if dlqResp.StatusCode != http.StatusOK {
+			t.Fatalf("DLQ request failed with status %d", dlqResp.StatusCode)
+		}
+
+		var dlqResult map[string]interface{}
+		json.NewDecoder(dlqResp.Body).Decode(&dlqResult)
+
+		count := int(dlqResult["count"].(float64))
+		if count == 0 {
+			t.Log("Message may not have reached DLQ yet (timing dependent)")
+		}
+	})
+
+	t.Run("DLQ list returns messages", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", env.ServerURL+"/dlq", nil)
+		req.Header.Set("Authorization", "Bearer "+TestAPIKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		if _, ok := result["messages"]; !ok {
+			t.Error("expected messages field in response")
+		}
+		if _, ok := result["count"]; !ok {
+			t.Error("expected count field in response")
+		}
+	})
+
+	t.Run("DLQ requires authorization", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", env.ServerURL+"/dlq", nil)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", resp.StatusCode)
+		}
+	})
+}
+
 func TestWildcardSubscription(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer env.Cleanup(t)

@@ -13,6 +13,13 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// pendingMsg holds a NATS message and its metadata for DLQ handling.
+type pendingMsg struct {
+	msg     jetstream.Msg
+	event   *domain.Event
+	attempt int
+}
+
 const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
@@ -32,21 +39,24 @@ type Client struct {
 	mu              sync.RWMutex
 	consumer        jetstream.Consumer
 	consumerContext jetstream.ConsumeContext
-	pendingMessages map[string]jetstream.Msg
+	pendingMessages map[string]*pendingMsg
 	autoAck         bool
 	maxRetries      int
+	group           string
+	dlqPublisher    *nats.DLQPublisher
 }
 
 // NewClient creates a new WebSocket client.
-func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, env string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, env string, dlqPublisher *nats.DLQPublisher) *Client {
 	return &Client{
 		hub:             hub,
 		conn:            conn,
 		send:            make(chan []byte, 256),
 		apiKeyID:        apiKeyID,
 		env:             env,
-		pendingMessages: make(map[string]jetstream.Msg),
+		pendingMessages: make(map[string]*pendingMsg),
 		maxRetries:      5,
+		dlqPublisher:    dlqPublisher,
 	}
 }
 
@@ -170,6 +180,7 @@ func (c *Client) handleSubscribe(ctx context.Context, msg *SubscribeMessage, con
 	c.mu.Lock()
 	c.autoAck = opts.AutoAck
 	c.maxRetries = opts.MaxRetries
+	c.group = opts.Group
 	c.mu.Unlock()
 
 	// Create consumer
@@ -236,16 +247,20 @@ func (c *Client) deliverMessage(msg jetstream.Msg) {
 	if autoAck {
 		msg.Ack()
 	} else {
-		// Store for manual ack
+		// Store for manual ack with metadata for DLQ handling
 		c.mu.Lock()
-		c.pendingMessages[event.ID] = msg
+		c.pendingMessages[event.ID] = &pendingMsg{
+			msg:     msg,
+			event:   &event,
+			attempt: attempt,
+		}
 		c.mu.Unlock()
 	}
 }
 
 func (c *Client) handleAck(msg *AckMessage) {
 	c.mu.Lock()
-	natsMsg, ok := c.pendingMessages[msg.ID]
+	pending, ok := c.pendingMessages[msg.ID]
 	if ok {
 		delete(c.pendingMessages, msg.ID)
 	}
@@ -256,7 +271,7 @@ func (c *Client) handleAck(msg *AckMessage) {
 		return
 	}
 
-	if err := natsMsg.Ack(); err != nil {
+	if err := pending.msg.Ack(); err != nil {
 		slog.Error("failed to ack", "error", err, "event_id", msg.ID)
 		c.sendError("ACK_ERROR", "failed to acknowledge")
 		return
@@ -267,14 +282,26 @@ func (c *Client) handleAck(msg *AckMessage) {
 
 func (c *Client) handleNack(msg *NackMessage) {
 	c.mu.Lock()
-	natsMsg, ok := c.pendingMessages[msg.ID]
+	pending, ok := c.pendingMessages[msg.ID]
 	if ok {
 		delete(c.pendingMessages, msg.ID)
 	}
+	maxRetries := c.maxRetries
+	group := c.group
 	c.mu.Unlock()
 
 	if !ok {
 		c.sendError("UNKNOWN_EVENT", "unknown event ID: "+msg.ID)
+		return
+	}
+
+	// If at max retries, move to DLQ instead of nacking
+	if pending.attempt >= maxRetries {
+		c.moveToDLQ(pending, group, "max retries exceeded")
+		if err := pending.msg.Term(); err != nil {
+			slog.Error("failed to terminate message", "error", err, "event_id", msg.ID)
+		}
+		slog.Info("event moved to DLQ", "event_id", msg.ID, "attempts", pending.attempt)
 		return
 	}
 
@@ -283,7 +310,7 @@ func (c *Client) handleNack(msg *NackMessage) {
 		delay = 5 * time.Minute
 	}
 
-	if err := natsMsg.NakWithDelay(delay); err != nil {
+	if err := pending.msg.NakWithDelay(delay); err != nil {
 		slog.Error("failed to nack", "error", err, "event_id", msg.ID)
 		c.sendError("NACK_ERROR", "failed to negative acknowledge")
 		return
@@ -300,11 +327,43 @@ func (c *Client) cleanup() {
 		c.consumerContext.Stop()
 	}
 
-	// Nack any pending messages so they get redelivered
-	for _, msg := range c.pendingMessages {
-		msg.Nak()
+	// Handle pending messages - either nack for retry or move to DLQ
+	for _, pending := range c.pendingMessages {
+		if pending.attempt >= c.maxRetries {
+			// At max retries, move to DLQ
+			c.moveToDLQ(pending, c.group, "client disconnected at max retries")
+			pending.msg.Term()
+			slog.Info("event moved to DLQ on disconnect", "event_id", pending.event.ID)
+		} else {
+			// Still has retries left, nack for redelivery
+			pending.msg.Nak()
+		}
 	}
 	c.pendingMessages = nil
+}
+
+func (c *Client) moveToDLQ(pending *pendingMsg, group, reason string) {
+	if c.dlqPublisher == nil {
+		return
+	}
+
+	dlqMsg := &nats.DLQMessage{
+		ID:            pending.event.ID,
+		OriginalTopic: pending.event.Topic,
+		Data:          pending.event.Data,
+		Timestamp:     pending.event.Timestamp,
+		FailedAt:      time.Now().UTC(),
+		Attempts:      pending.attempt,
+		LastError:     reason,
+		ConsumerGroup: group,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := c.dlqPublisher.Publish(ctx, dlqMsg); err != nil {
+		slog.Error("failed to publish to DLQ", "error", err, "event_id", pending.event.ID)
+	}
 }
 
 func (c *Client) sendJSON(v any) {

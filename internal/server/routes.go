@@ -32,13 +32,26 @@ func (s *Server) routes() http.Handler {
 	emitHandler := handler.NewEmitHandler(publisher, queries)
 
 	consumerMgr := nats.NewConsumerManager(s.nats.Stream())
-	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr)
+	dlqPublisher := nats.NewDLQPublisher(s.nats.JetStream())
+	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr, dlqPublisher)
+
+	// DLQ handler
+	dlqReader, _ := nats.NewDLQReader(s.nats.JetStream())
+	dlqHandler := handler.NewDLQHandler(dlqReader, publisher)
 
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware.Handler)
 
 		r.Post("/emit", emitHandler.Emit)
 		r.Get("/subscribe", subscribeHandler.Subscribe)
+
+		// DLQ endpoints
+		r.Get("/dlq", dlqHandler.List)
+		r.Get("/dlq/{seq}", dlqHandler.Get)
+		r.Post("/dlq/{seq}/replay", dlqHandler.Replay)
+		r.Delete("/dlq/{seq}", dlqHandler.Delete)
+		r.Post("/dlq/replay-all", dlqHandler.ReplayAll)
+		r.Delete("/dlq/purge", dlqHandler.Purge)
 	})
 
 	return r
