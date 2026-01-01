@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -53,7 +54,7 @@ func (h *SubscribeHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	client := websocket.NewClient(h.hub, conn, apiKeyID, env)
 	h.hub.Register(client)
 
-	// Start read/write pumps
+	// Start read/write pumps with a fresh context (not the HTTP request context)
 	go client.WritePump()
-	go client.ReadPump(r.Context(), h.consumerMgr)
+	go client.ReadPump(context.Background(), h.consumerMgr)
 }

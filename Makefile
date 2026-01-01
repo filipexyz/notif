@@ -12,9 +12,17 @@ run: build
 	LOG_FORMAT=text \
 	./bin/notif
 
-# Run tests
+# Run unit tests
 test:
-	go test -v -race ./...
+	go test -v -race ./internal/...
+
+# Run e2e tests (requires Docker)
+test-e2e:
+	go test -v -race -timeout 5m ./tests/e2e/...
+
+# Run all tests
+test-all:
+	go test -v -race -timeout 5m ./...
 
 # Generate sqlc code
 generate:
@@ -54,4 +62,4 @@ watch:
 
 # Show test key for curl commands
 key:
-	@echo "Test API Key: nsh_test_abcdefghij1234567890ab"
+	@echo "Test API Key: nsh_test_abcdefghij12345678901234"

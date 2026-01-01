@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"net/http"
 
 	"github.com/filipexyz/notif/internal/config"
@@ -42,6 +43,11 @@ func New(cfg *config.Config, db *pgxpool.Pool, nc *nats.Client) *Server {
 // Start starts the HTTP server.
 func (s *Server) Start() error {
 	return s.server.ListenAndServe()
+}
+
+// Serve starts the HTTP server on the given listener.
+func (s *Server) Serve(l net.Listener) error {
+	return s.server.Serve(l)
 }
 
 // Shutdown gracefully shuts down the server.
