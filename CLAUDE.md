@@ -27,6 +27,9 @@ Managed pub/sub event hub with webhooks, DLQ, and real-time subscriptions.
 │   ├── migrations/     # Goose migrations
 │   └── queries/        # sqlc queries
 ├── pkg/client/         # Go SDK
+├── sdk/
+│   ├── typescript/     # TypeScript SDK (npm: notif.sh)
+│   └── python/         # Python SDK (pip: notifsh)
 ├── tests/e2e/          # E2E tests (testcontainers)
 └── web/                # Frontend (TanStack Start)
 ```
@@ -84,6 +87,16 @@ API key format: `nsh_` + 28 alphanumeric chars (regex: `^nsh_[a-zA-Z0-9]{28}$`)
 - `NOTIF_EVENTS`: Events (24h retention, 1GB max)
 - `NOTIF_DLQ`: Dead letter queue (7d retention)
 - Subjects: `events.<topic>`, `dlq.<topic>`
+
+## SDKs
+
+| SDK | Package | Location |
+|-----|---------|----------|
+| Go | `github.com/filipexyz/notif/pkg/client` | `pkg/client/` |
+| TypeScript | `notif.sh` (npm) | `sdk/typescript/` |
+| Python | `notifsh` (pip) | `sdk/python/` |
+
+All SDKs use `NOTIF_API_KEY` env var by default. Core methods: `emit(topic, data)` and `subscribe(...topics)`.
 
 ## Development
 

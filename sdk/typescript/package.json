@@ -1,0 +1,61 @@
+{
+  "name": "notif.sh",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for notif.sh event hub",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && npm run build:types",
+    "build:esm": "tsc -p tsconfig.build.json --outDir dist/esm",
+    "build:cjs": "tsc -p tsconfig.build.json --outDir dist/cjs --module commonjs --moduleResolution node",
+    "build:types": "tsc -p tsconfig.build.json --outDir dist/types --declaration --emitDeclarationOnly",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "notif",
+    "notifsh",
+    "pubsub",
+    "events",
+    "webhooks",
+    "websocket"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/filipexyz/notif.git",
+    "directory": "sdk/typescript"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
