@@ -1,0 +1,48 @@
+{
+  "name": "n8n-nodes-notif",
+  "version": "0.1.0",
+  "description": "n8n community nodes for notif.sh event hub",
+  "keywords": [
+    "n8n-community-node-package"
+  ],
+  "license": "MIT",
+  "homepage": "https://notif.sh",
+  "author": {
+    "name": "notif.sh",
+    "email": "hello@notif.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/filipexyz/notif.git",
+    "directory": "packages/n8n"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "lint": "eslint nodes credentials --ext .ts",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/NotifApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Notif/Notif.node.js",
+      "dist/nodes/NotifTrigger/NotifTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "gulp": "^4.0.2",
+    "n8n-workflow": "*",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
