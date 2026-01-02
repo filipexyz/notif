@@ -107,6 +107,55 @@ ws.onmessage = (msg) => {
 }
 ```
 
+## SDKs
+
+### TypeScript / Node.js
+
+```bash
+npm install notif.sh
+```
+
+```typescript
+import { Notif } from 'notif.sh'
+
+const n = new Notif()  // Uses NOTIF_API_KEY env var
+
+// Emit
+await n.emit('leads.new', { name: 'John' })
+
+// Subscribe
+for await (const event of n.subscribe('leads.*')) {
+  console.log(event.data)
+}
+
+// Manual ack
+for await (const event of n.subscribe('leads.*', { autoAck: false })) {
+  await event.ack()
+}
+```
+
+### Python
+
+```bash
+pip install notifsh
+```
+
+```python
+from notifsh import Notif
+
+async with Notif() as n:  # Uses NOTIF_API_KEY env var
+    # Emit
+    await n.emit('leads.new', {'name': 'John'})
+
+    # Subscribe
+    async for event in n.subscribe('leads.*'):
+        print(event.data)
+
+    # Manual ack
+    async for event in n.subscribe('leads.*', auto_ack=False):
+        await event.ack()
+```
+
 ## API Reference
 
 ### Authentication
@@ -349,6 +398,9 @@ notif/
 ├── db/
 │   ├── migrations/      # Goose migrations
 │   └── queries/         # SQL queries
+├── sdk/
+│   ├── typescript/      # TypeScript SDK (npm: notif.sh)
+│   └── python/          # Python SDK (pip: notifsh)
 ├── web/                 # Frontend (TanStack Start)
 └── tests/e2e/           # Integration tests
 ```
