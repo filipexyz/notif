@@ -2,7 +2,11 @@ package nats
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -95,8 +99,10 @@ func (cm *ConsumerManager) CreateConsumer(ctx context.Context, opts Subscription
 
 	if opts.Group != "" {
 		// Durable consumer for consumer groups (load balanced)
-		config.Durable = opts.Group
-		config.DeliverGroup = opts.Group
+		// Include topic hash so different topic patterns get separate consumers
+		consumerName := opts.Group + "-" + hashTopics(opts.Topics)
+		config.Durable = consumerName
+		config.DeliverGroup = consumerName
 	}
 	// Else: ephemeral consumer (unique per connection)
 
@@ -106,4 +112,13 @@ func (cm *ConsumerManager) CreateConsumer(ctx context.Context, opts Subscription
 	}
 
 	return consumer, nil
+}
+
+// hashTopics returns a short hash of the sorted topics for consumer naming.
+func hashTopics(topics []string) string {
+	sorted := make([]string, len(topics))
+	copy(sorted, topics)
+	sort.Strings(sorted)
+	h := sha256.Sum256([]byte(strings.Join(sorted, ",")))
+	return hex.EncodeToString(h[:])[:8]
 }
