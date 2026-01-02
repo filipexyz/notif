@@ -42,7 +42,7 @@ console = Console()
 @dataclass
 class Agent:
     name: str
-    budget_usd: float
+    budget_usd: float | None
     cwd: str
 
 
@@ -152,7 +152,7 @@ async def show_agents(agents: list[Agent]) -> None:
         table.add_row(
             str(i),
             agent.name,
-            f"${agent.budget_usd:.2f}",
+            f"${agent.budget_usd:.2f}" if agent.budget_usd else "unlimited",
             agent.cwd or "-",
         )
 
@@ -165,7 +165,7 @@ async def chat_loop(client: ClaudeClient, agent: Agent) -> bool:
     """Run chat REPL. Returns True to go back to selection, False to exit."""
     console.print(Panel(
         f"Chat with [bold green]{agent.name}[/]\n"
-        f"Budget: ${agent.budget_usd:.2f} | CWD: {agent.cwd}\n\n"
+        f"Budget: {'unlimited' if agent.budget_usd is None else f'${agent.budget_usd:.2f}'} | CWD: {agent.cwd}\n\n"
         "[dim]Type 'back' to select another agent, 'exit' to quit[/]",
         title="Chat Session",
     ))
