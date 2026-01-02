@@ -91,9 +91,9 @@ fi
 
 chmod +x "$BINARY_PATH"
 
-# Clear macOS quarantine attribute to prevent Gatekeeper blocking
+# Clear macOS quarantine attributes to prevent Gatekeeper blocking
 if [ "$OS" = "darwin" ]; then
-    xattr -c "$BINARY_PATH" 2>/dev/null || true
+    xattr -cr "$HOME/.notif" 2>/dev/null || true
 fi
 
 # Setup shell integration
