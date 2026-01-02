@@ -105,7 +105,9 @@ func (o *Output) JSON(data any) {
 // Event prints a formatted event.
 func (o *Output) Event(id, topic string, data json.RawMessage, ts time.Time) {
 	if o.jsonMode {
-		o.JSON(map[string]any{
+		// Compact JSON for streaming (one line per event)
+		enc := json.NewEncoder(os.Stdout)
+		enc.Encode(map[string]any{
 			"id":        id,
 			"topic":     topic,
 			"data":      json.RawMessage(data),
