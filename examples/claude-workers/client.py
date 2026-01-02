@@ -43,7 +43,7 @@ console = Console()
 class Agent:
     name: str
     budget_usd: float | None
-    cwd: str
+    cwd: str | None
 
 
 class ClaudeClient:
@@ -165,7 +165,7 @@ async def chat_loop(client: ClaudeClient, agent: Agent) -> bool:
     """Run chat REPL. Returns True to go back to selection, False to exit."""
     console.print(Panel(
         f"Chat with [bold green]{agent.name}[/]\n"
-        f"Budget: {'unlimited' if agent.budget_usd is None else f'${agent.budget_usd:.2f}'} | CWD: {agent.cwd}\n\n"
+        f"Budget: {'unlimited' if agent.budget_usd is None else f'${agent.budget_usd:.2f}'} | CWD: {agent.cwd or 'N/A'}\n\n"
         "[dim]Type 'back' to select another agent, 'exit' to quit[/]",
         title="Chat Session",
     ))
