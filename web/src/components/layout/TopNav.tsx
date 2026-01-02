@@ -1,5 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { UserButton } from "@clerk/tanstack-react-start";
+import { Badge } from "../ui/Badge";
 
 const navItems = [
   { href: "/", label: "Events" },
@@ -23,6 +24,7 @@ export function TopNav({ dlqCount = 0 }: TopNavProps) {
           <Link to="/" className="text-lg font-semibold text-neutral-900">
             notif.sh
           </Link>
+          <Badge className="bg-primary-100 text-primary-700">beta</Badge>
 
           {/* Nav Links */}
           <nav className="flex items-center gap-1">
