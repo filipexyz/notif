@@ -1,4 +1,4 @@
-.PHONY: build build-cli run test generate dev dev-down clean seed migrate migrate-down migrate-status
+.PHONY: build build-cli run test generate dev dev-down clean seed migrate migrate-down migrate-status publish-ts publish-py publish-sdks
 
 # Build the server binary
 build:
@@ -94,3 +94,14 @@ watch:
 # Show test key for curl commands
 key:
 	@echo "Test API Key: nsh_test_abcdefghij12345678901234"
+
+# Publish TypeScript SDK to npm
+publish-ts:
+	cd sdk/typescript && npm run build && npm publish
+
+# Publish Python SDK to PyPI
+publish-py:
+	cd sdk/python && python -m build && twine upload dist/*
+
+# Publish all SDKs
+publish-sdks: publish-ts publish-py
