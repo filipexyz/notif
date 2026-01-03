@@ -51,7 +51,20 @@ async with Notif() as n:
     await n.emit('orders.new', {'order_id': '12345', 'amount': 99.99})
 ```
 
-### 4. Subscribe to Events
+### 4. Request-Response (CLI)
+
+Emit and wait for a response on another topic:
+
+```bash
+notif emit 'tasks.create' '{"task_id": "abc", "action": "process"}' \
+  --reply-to 'tasks.completed,tasks.failed' \
+  --filter '.task_id == "abc"' \
+  --timeout 60s
+```
+
+This subscribes to reply topics, emits the event, and waits for a matching response.
+
+### 5. Subscribe to Events
 
 **CLI**
 ```bash
