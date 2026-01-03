@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Note: matchesJqFilter and compileJqFilter are in jq.go
+
 var (
 	replyTo      string
 	replyFilter  string
@@ -116,14 +118,9 @@ func runRequestResponse(c *client.Client, topic string, data json.RawMessage) {
 	// Parse jq filter if provided
 	var jqCode *gojq.Code
 	if replyFilter != "" {
-		query, err := gojq.Parse(replyFilter)
+		code, err := compileJqFilter(replyFilter)
 		if err != nil {
 			out.Error("Invalid jq filter: %v", err)
-			os.Exit(1)
-		}
-		code, err := gojq.Compile(query)
-		if err != nil {
-			out.Error("Failed to compile jq filter: %v", err)
 			os.Exit(1)
 		}
 		jqCode = code
@@ -191,37 +188,6 @@ func runRequestResponse(c *client.Client, topic string, data json.RawMessage) {
 			os.Exit(1)
 		}
 	}
-}
-
-func matchesJqFilter(code *gojq.Code, data json.RawMessage) bool {
-	if code == nil {
-		return true // no filter = match any
-	}
-
-	var input any
-	if err := json.Unmarshal(data, &input); err != nil {
-		return false
-	}
-
-	iter := code.Run(input)
-	v, ok := iter.Next()
-	if !ok {
-		return false
-	}
-
-	// Handle error from jq
-	if err, ok := v.(error); ok {
-		_ = err
-		return false
-	}
-
-	// jq filter expressions return true/false
-	if b, ok := v.(bool); ok {
-		return b
-	}
-
-	// Non-nil result means match (for select-style filters)
-	return v != nil
 }
 
 func init() {
