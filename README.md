@@ -28,6 +28,11 @@ npm install notif.sh
 pip install notifsh
 ```
 
+**Rust**
+```bash
+cargo add notifsh
+```
+
 ### 3. Publish Events
 
 **CLI**
@@ -49,6 +54,15 @@ from notifsh import Notif
 
 async with Notif() as n:
     await n.emit('orders.new', {'order_id': '12345', 'amount': 99.99})
+```
+
+**Rust**
+```rust
+use notifsh::Notif;
+use serde_json::json;
+
+let client = Notif::from_env()?;
+client.emit("orders.new", json!({"order_id": "12345", "amount": 99.99})).await?;
 ```
 
 ### 4. Request-Response (CLI)
@@ -82,6 +96,17 @@ for await (const event of n.subscribe('orders.*')) {
 ```python
 async for event in n.subscribe('orders.*'):
     print(event.topic, event.data)
+```
+
+**Rust**
+```rust
+use futures::StreamExt;
+
+let mut stream = client.subscribe(&["orders.*"]).await?;
+while let Some(event) = stream.next().await {
+    let event = event?;
+    println!("{} {:?}", event.topic, event.data);
+}
 ```
 
 ## Features
@@ -130,6 +155,23 @@ async for event in n.subscribe('orders.*', auto_ack=False):
         await event.nack('5m')
 ```
 
+**Rust**
+```rust
+use notifsh::SubscribeOptions;
+
+let mut stream = client
+    .subscribe_with_options(&["orders.*"], SubscribeOptions::new().auto_ack(false))
+    .await?;
+
+while let Some(event) = stream.next().await {
+    let event = event?;
+    match process_order(&event.data).await {
+        Ok(_) => event.ack().await?,
+        Err(_) => event.nack(Some("5m")).await?,
+    }
+}
+```
+
 ## REST API
 
 Base URL: `https://api.notif.sh`
@@ -159,6 +201,7 @@ curl -X POST https://api.notif.sh/api/v1/webhooks \
 - [Documentation](https://docs.notif.sh)
 - [TypeScript SDK](https://www.npmjs.com/package/notif.sh)
 - [Python SDK](https://pypi.org/project/notifsh)
+- [Rust SDK](https://crates.io/crates/notifsh)
 
 ## Self-Hosting
 

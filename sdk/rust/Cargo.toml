@@ -1,0 +1,32 @@
+[package]
+name = "notifsh"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Rust SDK for notif.sh - managed pub/sub event hub"
+repository = "https://github.com/filipexyz/notif"
+keywords = ["pubsub", "events", "webhooks", "messaging"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+reqwest = { version = "0.12", features = ["json"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures = "0.3"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+url = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[[example]]
+name = "emit"
+path = "examples/emit.rs"
+
+[[example]]
+name = "subscribe"
+path = "examples/subscribe.rs"
