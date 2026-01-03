@@ -1,4 +1,4 @@
-.PHONY: build build-cli run test generate dev dev-down clean seed migrate migrate-down migrate-status publish-ts publish-py publish-sdks
+.PHONY: build build-cli run test generate dev dev-down clean seed migrate migrate-down migrate-status publish-ts publish-py publish-rs publish-sdks
 
 # Build the server binary
 build:
@@ -103,5 +103,9 @@ publish-ts:
 publish-py:
 	cd sdk/python && python -m build && twine upload dist/*
 
+# Publish Rust SDK to crates.io
+publish-rs:
+	cd sdk/rust && cargo publish
+
 # Publish all SDKs
-publish-sdks: publish-ts publish-py
+publish-sdks: publish-ts publish-py publish-rs
