@@ -21,6 +21,7 @@ var (
 	replyTo      string
 	replyFilter  string
 	replyTimeout time.Duration
+	rawOutput    bool
 )
 
 var emitCmd = &cobra.Command{
@@ -169,7 +170,13 @@ func runRequestResponse(c *client.Client, topic string, data json.RawMessage) {
 
 			// Check if event matches filter
 			if matchesJqFilter(jqCode, event.Data) {
-				out.Event(event.ID, event.Topic, event.Data, event.Timestamp)
+				if rawOutput {
+					// Output just the data field (for hooks, pipes, etc.)
+					os.Stdout.Write(event.Data)
+					os.Stdout.WriteString("\n")
+				} else {
+					out.Event(event.ID, event.Topic, event.Data, event.Timestamp)
+				}
 				return
 			}
 
@@ -194,5 +201,6 @@ func init() {
 	emitCmd.Flags().StringVar(&replyTo, "reply-to", "", "topics to wait for response (comma-separated)")
 	emitCmd.Flags().StringVar(&replyFilter, "filter", "", "jq expression to match response")
 	emitCmd.Flags().DurationVar(&replyTimeout, "timeout", 30*time.Second, "timeout waiting for response")
+	emitCmd.Flags().BoolVar(&rawOutput, "raw", false, "output only the data field (for hooks/pipes)")
 	rootCmd.AddCommand(emitCmd)
 }
