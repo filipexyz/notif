@@ -114,8 +114,8 @@ Filter and auto-exit:
 					return
 				}
 
-				// Check filter
-				if !matchesJqFilter(jqCode, event.Data) {
+				// Check filter (no $input for subscribe)
+				if !matchesJqFilter(jqCode, event.Data, nil) {
 					continue // skip non-matching events
 				}
 

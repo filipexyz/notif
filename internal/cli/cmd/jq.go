@@ -7,28 +7,38 @@ import (
 )
 
 // compileJqFilter parses and compiles a jq filter expression.
+// Supports $input variable to reference the emitted request data.
 func compileJqFilter(filter string) (*gojq.Code, error) {
 	query, err := gojq.Parse(filter)
 	if err != nil {
 		return nil, err
 	}
-	return gojq.Compile(query)
+	return gojq.Compile(query, gojq.WithVariables([]string{"$input"}))
 }
 
 // matchesJqFilter evaluates a compiled jq filter against JSON data.
 // Returns true if the filter matches (expression evaluates to true or non-nil).
 // If code is nil, returns true (no filter = match all).
-func matchesJqFilter(code *gojq.Code, data json.RawMessage) bool {
+// The inputData parameter is available as $input in the filter expression.
+func matchesJqFilter(code *gojq.Code, data json.RawMessage, inputData json.RawMessage) bool {
 	if code == nil {
 		return true
 	}
 
-	var input any
-	if err := json.Unmarshal(data, &input); err != nil {
+	var response any
+	if err := json.Unmarshal(data, &response); err != nil {
 		return false
 	}
 
-	iter := code.Run(input)
+	// Parse input data for $input variable
+	var input any
+	if inputData != nil {
+		if err := json.Unmarshal(inputData, &input); err != nil {
+			input = nil
+		}
+	}
+
+	iter := code.Run(response, input)
 	v, ok := iter.Next()
 	if !ok {
 		return false

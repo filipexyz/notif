@@ -37,8 +37,10 @@ Examples:
 Request-response mode (wait for reply):
   notif emit orders.create '{"id": 123}' \
     --reply-to 'orders.created,orders.failed' \
-    --filter '.id == 123' \
-    --timeout 30s`,
+    --filter '.id == $input.id' \
+    --timeout 30s
+
+The $input variable in --filter references the emitted request data.`,
 	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
 		if cfg.APIKey == "" {
@@ -168,8 +170,8 @@ func runRequestResponse(c *client.Client, topic string, data json.RawMessage) {
 				os.Exit(1)
 			}
 
-			// Check if event matches filter
-			if matchesJqFilter(jqCode, event.Data) {
+			// Check if event matches filter ($input available in filter)
+			if matchesJqFilter(jqCode, event.Data, data) {
 				if rawOutput {
 					// Output just the data field (for hooks, pipes, etc.)
 					os.Stdout.Write(event.Data)
