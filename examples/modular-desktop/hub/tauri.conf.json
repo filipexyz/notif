@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Hub",
+  "identifier": "sh.notif.modular-desktop.hub",
+  "version": "0.1.0",
+  "build": {
+    "frontendDist": "./ui"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Modular Desktop - Hub",
+        "width": 400,
+        "height": 500,
+        "resizable": true,
+        "center": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": []
+  }
+}

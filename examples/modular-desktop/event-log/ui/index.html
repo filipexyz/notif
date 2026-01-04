@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Log</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: #888;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #666;
+    }
+    .status-dot.connected {
+      background: #4ade80;
+    }
+    .status-dot.error {
+      background: #f87171;
+    }
+    .events {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+    .event {
+      padding: 12px;
+      margin-bottom: 8px;
+      background: #16162a;
+      border-radius: 8px;
+      border-left: 3px solid #6366f1;
+    }
+    .event.hub {
+      border-left-color: #6366f1;
+    }
+    .event.toast {
+      border-left-color: #f59e0b;
+    }
+    .event-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .event-topic {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #6366f1;
+    }
+    .event.toast .event-topic {
+      color: #f59e0b;
+    }
+    .event-time {
+      font-size: 0.75rem;
+      color: #666;
+    }
+    .event-id {
+      font-size: 0.7rem;
+      color: #555;
+      font-family: monospace;
+      margin-bottom: 6px;
+    }
+    .event-data {
+      font-size: 0.8rem;
+      font-family: monospace;
+      color: #aaa;
+      background: #0f0f1a;
+      padding: 8px;
+      border-radius: 4px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .empty {
+      text-align: center;
+      color: #555;
+      padding: 40px;
+    }
+    .clear-btn {
+      padding: 6px 12px;
+      border: 1px solid #333;
+      border-radius: 4px;
+      background: transparent;
+      color: #888;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .clear-btn:hover {
+      background: #222;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Event Log</h1>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <button class="clear-btn" id="clearBtn">Clear</button>
+      <div class="status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="events" id="events">
+    <div class="empty" id="empty">Waiting for events...</div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { listen } = window.__TAURI__.event;
+
+    const eventsContainer = document.getElementById('events');
+    const empty = document.getElementById('empty');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const clearBtn = document.getElementById('clearBtn');
+
+    let events = [];
+
+    function formatTime(timestamp) {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString();
+    }
+
+    function getEventClass(topic) {
+      if (topic.startsWith('desktop.toast')) return 'toast';
+      if (topic.startsWith('desktop.hub')) return 'hub';
+      return '';
+    }
+
+    function renderEvents() {
+      if (events.length === 0) {
+        empty.style.display = 'block';
+        return;
+      }
+
+      empty.style.display = 'none';
+
+      // Keep only rendered events, add new ones at top
+      const html = events.map(event => `
+        <div class="event ${getEventClass(event.topic)}">
+          <div class="event-header">
+            <span class="event-topic">${event.topic}</span>
+            <span class="event-time">${formatTime(event.timestamp)}</span>
+          </div>
+          <div class="event-id">${event.id}</div>
+          <div class="event-data">${JSON.stringify(event.data, null, 2)}</div>
+        </div>
+      `).join('');
+
+      eventsContainer.innerHTML = html + '<div class="empty" id="empty" style="display:none">Waiting for events...</div>';
+    }
+
+    function addEvent(event) {
+      events.unshift(event);
+      // Keep only last 100 events
+      if (events.length > 100) {
+        events = events.slice(0, 100);
+      }
+      renderEvents();
+    }
+
+    function updateStatus(status) {
+      if (status === 'connected') {
+        statusDot.className = 'status-dot connected';
+        statusText.textContent = 'Connected';
+      } else if (status === 'error' || status === 'disconnected') {
+        statusDot.className = 'status-dot error';
+        statusText.textContent = status === 'error' ? 'Error' : 'Disconnected';
+      } else {
+        statusDot.className = 'status-dot';
+        statusText.textContent = 'Connecting...';
+      }
+    }
+
+    clearBtn.addEventListener('click', () => {
+      events = [];
+      renderEvents();
+    });
+
+    // Listen for events from Rust
+    listen('event', (e) => {
+      addEvent(e.payload);
+    });
+
+    listen('status', (e) => {
+      updateStatus(e.payload);
+    });
+
+    // Check initial status
+    invoke('get_env_status').then(status => {
+      if (status === 'not_configured') {
+        statusDot.className = 'status-dot error';
+        statusText.textContent = 'NOTIF_API_KEY not set';
+      }
+    });
+
+    console.log('Event Log widget ready');
+  </script>
+</body>
+</html>
