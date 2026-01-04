@@ -2,6 +2,14 @@
 
 All notable changes to the notif CLI will be documented in this file.
 
+## [0.1.6] - 2026-01-03
+
+### Added
+
+- **emit**: `--raw` flag to output only the response data field
+  - Useful for hooks and pipes that need just the JSON payload
+  - Example: `notif emit 'request' '{}' --reply-to 'response' --raw`
+
 ## [0.1.5] - 2026-01-03
 
 ### Added
