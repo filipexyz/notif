@@ -2,6 +2,15 @@
 
 All notable changes to the notif CLI will be documented in this file.
 
+## [0.1.7] - 2026-01-03
+
+### Added
+
+- **emit**: `$input` variable in `--filter` expressions
+  - Reference the emitted request data when filtering responses
+  - Enables session-based filtering for multi-client scenarios
+  - Example: `notif emit 'request' '{"session_id":"abc"}' --reply-to 'response' --filter '.session_id == $input.session_id'`
+
 ## [0.1.6] - 2026-01-03
 
 ### Added
