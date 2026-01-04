@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toast</title>
+  <script src="https://cdn.jsdelivr.net/npm/diff@5.1.0/dist/diff.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      background: transparent;
+      overflow: hidden;
+    }
+    .toast {
+      display: none;
+      width: 330px;
+      padding: 16px;
+      border-radius: 12px;
+      background: rgba(26, 26, 46, 0.95);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      animation: slideIn 0.3s ease-out;
+    }
+    .toast.visible {
+      display: block;
+    }
+    .toast.hiding {
+      animation: slideOut 0.3s ease-in forwards;
+    }
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    @keyframes slideOut {
+      from {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+    }
+    .toast-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .toast-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+    .toast-icon.info {
+      background: #3b82f6;
+    }
+    .toast-icon.warn {
+      background: #f59e0b;
+    }
+    .toast-icon.error {
+      background: #ef4444;
+    }
+    .toast-title {
+      flex: 1;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #fff;
+    }
+    .toast-close {
+      width: 20px;
+      height: 20px;
+      border: none;
+      background: transparent;
+      color: #666;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .toast-close:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+    .toast-body {
+      font-size: 0.85rem;
+      color: #aaa;
+      line-height: 1.4;
+    }
+    .toast-progress {
+      margin-top: 12px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .toast-progress-bar {
+      height: 100%;
+      background: #6366f1;
+      width: 100%;
+      animation: progress 5s linear forwards;
+    }
+    @keyframes progress {
+      from { width: 100%; }
+      to { width: 0%; }
+    }
+    /* Permission prompt */
+    .permission {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: fit-content;
+      min-width: 400px;
+      max-width: 90vw;
+      max-height: 80vh;
+      padding: 20px;
+      border-radius: 12px;
+      background: rgba(30, 30, 63, 0.98);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      animation: fadeIn 0.2s ease-out;
+      overflow-y: auto;
+    }
+    .permission.wide {
+      min-width: 500px;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+    .permission.visible {
+      display: block;
+    }
+    .permission-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .permission-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: #f59e0b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .permission-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #fff;
+    }
+    .permission-subtitle {
+      font-size: 0.7rem;
+      color: #888;
+    }
+    .permission-content {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      padding: 8px;
+      margin-bottom: 10px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      max-height: 60vh;
+      overflow: auto;
+    }
+    .permission-content .tool-name {
+      color: #f59e0b;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .permission-content pre {
+      color: #aaa;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 0;
+    }
+    /* Diff view styling */
+    .diff-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+    }
+    .diff-row {
+      border-left: 3px solid transparent;
+    }
+    .diff-row:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .diff-row.added {
+      background: rgba(34, 197, 94, 0.1);
+      border-left-color: rgba(34, 197, 94, 0.5);
+    }
+    .diff-row.removed {
+      background: rgba(239, 68, 68, 0.1);
+      border-left-color: rgba(239, 68, 68, 0.5);
+    }
+    .diff-linenum {
+      width: 40px;
+      padding: 2px 8px;
+      text-align: right;
+      color: #555;
+      user-select: none;
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .diff-row:hover .diff-linenum {
+      color: #888;
+    }
+    .diff-sign {
+      width: 20px;
+      padding: 2px 4px;
+      text-align: center;
+      font-weight: bold;
+      user-select: none;
+    }
+    .diff-row.added .diff-sign {
+      color: #4ade80;
+    }
+    .diff-row.removed .diff-sign {
+      color: #f87171;
+    }
+    .diff-row.unchanged .diff-sign {
+      color: #444;
+    }
+    .diff-content {
+      padding: 2px 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .diff-row.added .diff-content {
+      color: rgba(74, 222, 128, 0.9);
+    }
+    .diff-row.removed .diff-content {
+      color: rgba(248, 113, 113, 0.9);
+    }
+    .diff-row.unchanged .diff-content {
+      color: #777;
+    }
+    /* Word-level highlights */
+    .word-added {
+      background: rgba(34, 197, 94, 0.3);
+      color: #bbf7d0;
+      border-radius: 2px;
+      padding: 0 2px;
+    }
+    .word-removed {
+      background: rgba(239, 68, 68, 0.3);
+      color: #fecaca;
+      border-radius: 2px;
+      padding: 0 2px;
+    }
+    .permission-custom {
+      margin-bottom: 10px;
+    }
+    .permission-custom input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      background: rgba(0,0,0,0.3);
+      color: #fff;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .permission-custom input:focus {
+      border-color: #f59e0b;
+    }
+    .permission-timeout {
+      margin-top: 10px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .permission-timeout-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #f59e0b, #ef4444);
+      width: 100%;
+      transition: width 0.1s linear;
+    }
+    .permission-hint {
+      text-align: center;
+      font-size: 0.65rem;
+      color: #555;
+      margin-top: 8px;
+    }
+    .permission-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    .permission-buttons button {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-allow {
+      background: #22c55e;
+      color: #fff;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+    }
+    .btn-allow:hover {
+      background: #16a34a;
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.5);
+    }
+    .btn-deny {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .btn-deny:hover {
+      background: rgba(239, 68, 68, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="toast" id="toast">
+    <div class="toast-header">
+      <div class="toast-icon info" id="icon">i</div>
+      <div class="toast-title" id="title">Notification</div>
+      <button class="toast-close" id="closeBtn">&times;</button>
+    </div>
+    <div class="toast-body" id="body">Message body here</div>
+    <div class="toast-progress">
+      <div class="toast-progress-bar" id="progressBar"></div>
+    </div>
+  </div>
+
+  <div class="permission" id="permission">
+    <div class="permission-header">
+      <div class="permission-icon">⚡</div>
+      <div>
+        <div class="permission-title">Permission Request</div>
+        <div class="permission-subtitle" id="permSubtitle">Claude Code wants to run a tool</div>
+      </div>
+    </div>
+    <div class="permission-content">
+      <div class="tool-name" id="toolName">Tool</div>
+      <pre id="toolInput">{}</pre>
+    </div>
+    <div class="permission-custom" id="customInput" style="display:none;">
+      <input type="text" id="customText" placeholder="Reason for denial..." />
+    </div>
+    <div class="permission-buttons">
+      <button class="btn-deny" id="btnDeny">Deny (Esc)</button>
+      <button class="btn-allow" id="btnAllow">Allow (⏎)</button>
+    </div>
+    <div class="permission-timeout">
+      <div class="permission-timeout-bar" id="timeoutBar"></div>
+    </div>
+    <div class="permission-hint">Tab for custom deny message</div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { listen } = window.__TAURI__.event;
+
+    const toast = document.getElementById('toast');
+    const icon = document.getElementById('icon');
+    const title = document.getElementById('title');
+    const body = document.getElementById('body');
+    const closeBtn = document.getElementById('closeBtn');
+    const progressBar = document.getElementById('progressBar');
+
+    let dismissTimer = null;
+    let currentNotification = null;
+
+    const iconContent = {
+      info: 'i',
+      warn: '!',
+      error: '×'
+    };
+
+    async function showNotification(notification) {
+      currentNotification = notification;
+
+      // Update content
+      title.textContent = notification.title;
+      body.textContent = notification.body;
+
+      // Update icon
+      icon.className = `toast-icon ${notification.level}`;
+      icon.textContent = iconContent[notification.level] || 'i';
+
+      // Reset progress bar
+      progressBar.style.animation = 'none';
+      progressBar.offsetHeight; // Trigger reflow
+      progressBar.style.animation = 'progress 5s linear forwards';
+
+      // Show toast
+      toast.classList.remove('hiding');
+      toast.classList.add('visible');
+      await invoke('show_window');
+
+      // Auto dismiss after 5 seconds
+      clearTimeout(dismissTimer);
+      dismissTimer = setTimeout(() => {
+        hideNotification();
+      }, 5000);
+    }
+
+    async function hideNotification() {
+      clearTimeout(dismissTimer);
+      toast.classList.add('hiding');
+
+      setTimeout(async () => {
+        toast.classList.remove('visible', 'hiding');
+        await invoke('hide_window');
+      }, 300);
+    }
+
+    closeBtn.addEventListener('click', hideNotification);
+
+    // Listen for notifications from Rust
+    listen('notification', (event) => {
+      showNotification(event.payload);
+    });
+
+    // Permission handling
+    const permission = document.getElementById('permission');
+    const permSubtitle = document.getElementById('permSubtitle');
+    const toolName = document.getElementById('toolName');
+    const toolInput = document.getElementById('toolInput');
+    const btnAllow = document.getElementById('btnAllow');
+    const btnDeny = document.getElementById('btnDeny');
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Get language from file extension
+    function getLanguage(filePath) {
+      if (!filePath) return null;
+      const ext = filePath.split('.').pop().toLowerCase();
+      const langMap = {
+        'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'tsx': 'typescript',
+        'rs': 'rust', 'go': 'go', 'py': 'python', 'rb': 'ruby',
+        'html': 'html', 'css': 'css', 'scss': 'scss', 'json': 'json',
+        'yaml': 'yaml', 'yml': 'yaml', 'md': 'markdown', 'sql': 'sql',
+        'sh': 'bash', 'bash': 'bash', 'zsh': 'bash',
+        'java': 'java', 'kt': 'kotlin', 'swift': 'swift',
+        'c': 'c', 'cpp': 'cpp', 'h': 'c', 'hpp': 'cpp',
+        'toml': 'toml', 'xml': 'xml', 'vue': 'html', 'svelte': 'html'
+      };
+      return langMap[ext] || null;
+    }
+
+    // Highlight code content
+    function highlightCode(content, language) {
+      if (!language || typeof hljs === 'undefined') return escapeHtml(content);
+      try {
+        return hljs.highlight(content, { language }).value;
+      } catch (e) {
+        return escapeHtml(content);
+      }
+    }
+
+    // Calculate diff with word-level highlighting
+    function calculateDiff(oldStr, newStr) {
+      const changes = Diff.diffLines(oldStr, newStr);
+      const lines = [];
+
+      let oldLineCounter = 1;
+      let newLineCounter = 1;
+
+      for (let i = 0; i < changes.length; i++) {
+        const change = changes[i];
+        const currentLines = change.value.replace(/\n$/, '').split('\n');
+
+        // Handle added/removed blocks to check for word-level similarities
+        if (change.removed && i + 1 < changes.length && changes[i + 1].added) {
+          const nextChange = changes[i + 1];
+          const nextLines = nextChange.value.replace(/\n$/, '').split('\n');
+
+          // If same number of lines, compare them 1:1 for word diffs
+          if (currentLines.length === nextLines.length) {
+            for (let j = 0; j < currentLines.length; j++) {
+              const wordDiff = Diff.diffWordsWithSpace(currentLines[j], nextLines[j]);
+
+              lines.push({
+                type: 'removed',
+                content: currentLines[j],
+                oldLineNumber: oldLineCounter++,
+                words: wordDiff.filter(p => !p.added)
+              });
+
+              lines.push({
+                type: 'added',
+                content: nextLines[j],
+                newLineNumber: newLineCounter++,
+                words: wordDiff.filter(p => !p.removed)
+              });
+            }
+            i++; // Skip the next 'added' block since we processed it here
+            continue;
+          }
+        }
+
+        // Standard processing
+        currentLines.forEach(lineContent => {
+          if (change.added) {
+            lines.push({
+              type: 'added',
+              content: lineContent,
+              newLineNumber: newLineCounter++
+            });
+          } else if (change.removed) {
+            lines.push({
+              type: 'removed',
+              content: lineContent,
+              oldLineNumber: oldLineCounter++
+            });
+          } else {
+            lines.push({
+              type: 'unchanged',
+              content: lineContent,
+              oldLineNumber: oldLineCounter++,
+              newLineNumber: newLineCounter++
+            });
+          }
+        });
+      }
+
+      return lines;
+    }
+
+    // Render diff as HTML table with syntax highlighting
+    function renderDiff(oldStr, newStr, filePath) {
+      const lines = calculateDiff(oldStr, newStr);
+      const language = getLanguage(filePath);
+
+      let html = '<table class="diff-table"><tbody>';
+
+      for (const line of lines) {
+        const typeClass = line.type;
+        const sign = line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' ';
+        const oldNum = line.oldLineNumber || '';
+        const newNum = line.newLineNumber || '';
+
+        let contentHtml;
+        if (line.words) {
+          // Word-level highlighting - apply syntax highlighting to each part
+          contentHtml = line.words.map(part => {
+            const highlighted = highlightCode(part.value, language);
+            if (part.added) {
+              return `<span class="word-added">${highlighted}</span>`;
+            } else if (part.removed) {
+              return `<span class="word-removed">${highlighted}</span>`;
+            } else {
+              return highlighted;
+            }
+          }).join('');
+        } else {
+          contentHtml = highlightCode(line.content, language);
+        }
+
+        html += `<tr class="diff-row ${typeClass}">
+          <td class="diff-linenum">${oldNum}</td>
+          <td class="diff-linenum">${newNum}</td>
+          <td class="diff-sign">${sign}</td>
+          <td class="diff-content">${contentHtml}</td>
+        </tr>`;
+      }
+
+      html += '</tbody></table>';
+      return html;
+    }
+
+    async function showPermission(request) {
+      // Hide any toast first
+      toast.classList.remove('visible');
+      permission.classList.remove('wide');
+
+      const name = request.tool_name || 'Unknown Tool';
+      const input = request.tool_input || {};
+      const cwd = request.cwd || '';
+
+      toolName.textContent = name;
+
+      // Get relative path from cwd
+      const getRelativePath = (filePath) => {
+        if (!filePath) return 'file';
+        if (cwd && filePath.startsWith(cwd)) {
+          return filePath.slice(cwd.length + 1); // +1 for the slash
+        }
+        // Fallback: show from home or last 3 parts
+        const parts = filePath.split('/');
+        if (parts.length > 4) {
+          return '.../' + parts.slice(-3).join('/');
+        }
+        return filePath.replace(/^\/Users\/[^/]+\//, '~/');
+      };
+
+      // Format input based on tool type
+      if (name === 'Edit' && input.old_string && input.new_string) {
+        // Show unified diff view for edits - use wide mode
+        permission.classList.add('wide');
+        const filePath = getRelativePath(input.file_path);
+        toolName.textContent = `Edit: ${filePath}`;
+        toolInput.innerHTML = renderDiff(input.old_string, input.new_string, input.file_path);
+      } else if (name === 'Write') {
+        const filePath = getRelativePath(input.file_path);
+        toolName.textContent = `Write: ${filePath}`;
+        const content = input.content || '';
+        const truncate = (s, max = 200) => s.length > max ? s.slice(0, max) + '...' : s;
+        toolInput.textContent = truncate(content);
+      } else if (name === 'Bash') {
+        toolInput.textContent = input.command || JSON.stringify(input, null, 2);
+      } else if (name === 'Read') {
+        const filePath = getRelativePath(input.file_path);
+        toolName.textContent = `Read: ${filePath}`;
+        toolInput.textContent = input.file_path || '';
+      } else {
+        toolInput.textContent = JSON.stringify(input, null, 2);
+      }
+
+      // Show cwd in subtitle
+      if (cwd) {
+        const shortCwd = cwd.replace(/^\/Users\/[^/]+/, '~');
+        permSubtitle.textContent = shortCwd;
+      } else {
+        permSubtitle.textContent = 'Claude Code wants to run a tool';
+      }
+
+      permission.classList.add('visible');
+      await invoke('show_window');
+
+      // Start timeout countdown
+      startPermissionTimeout();
+
+      // Focus window for keyboard events
+      window.focus();
+    }
+
+    // Custom input elements
+    const customInputDiv = document.getElementById('customInput');
+    const customText = document.getElementById('customText');
+    const timeoutBar = document.getElementById('timeoutBar');
+    let customMode = false;
+
+    // Timeout handling
+    const PERMISSION_TIMEOUT = 45000; // 45 seconds
+    let permissionTimeout = null;
+    let timeoutInterval = null;
+    let timeoutStart = null;
+
+    function startPermissionTimeout() {
+      clearPermissionTimeout();
+      timeoutStart = Date.now();
+      timeoutBar.style.width = '100%';
+
+      // Update progress bar every 100ms
+      timeoutInterval = setInterval(() => {
+        const elapsed = Date.now() - timeoutStart;
+        const remaining = Math.max(0, 1 - elapsed / PERMISSION_TIMEOUT);
+        timeoutBar.style.width = `${remaining * 100}%`;
+      }, 100);
+
+      // Auto-deny after timeout
+      permissionTimeout = setTimeout(async () => {
+        clearPermissionTimeout();
+        await handlePermission('deny', 'Timeout - auto denied after 45s');
+      }, PERMISSION_TIMEOUT);
+    }
+
+    function clearPermissionTimeout() {
+      if (permissionTimeout) {
+        clearTimeout(permissionTimeout);
+        permissionTimeout = null;
+      }
+      if (timeoutInterval) {
+        clearInterval(timeoutInterval);
+        timeoutInterval = null;
+      }
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', async (e) => {
+      if (!permission.classList.contains('visible')) return;
+
+      if (customMode) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const msg = customText.value.trim() || null;
+          await handlePermission('deny', msg);
+          resetCustomMode();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          resetCustomMode();
+        }
+        return;
+      }
+
+      function resetCustomMode() {
+        customMode = false;
+        customInputDiv.style.display = 'none';
+        customText.value = '';
+        btnAllow.style.display = '';
+        btnDeny.textContent = 'Deny (Esc)';
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await handlePermission('allow');
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        await handlePermission('deny');
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        customMode = true;
+        customInputDiv.style.display = 'block';
+        customText.focus();
+        btnAllow.style.display = 'none';
+        btnDeny.textContent = 'Send (⏎)';
+      }
+    });
+
+    async function hidePermission() {
+      permission.classList.remove('visible');
+      await invoke('hide_window');
+    }
+
+    async function handlePermission(decision, message = null) {
+      clearPermissionTimeout();
+      await hidePermission();
+      try {
+        await invoke('respond_permission', { decision, message });
+      } catch (err) {
+        console.error('Failed to respond:', err);
+      }
+    }
+
+    btnAllow.addEventListener('click', () => handlePermission('allow'));
+    btnDeny.addEventListener('click', () => handlePermission('deny'));
+
+    listen('permission_request', (event) => {
+      showPermission(event.payload || {});
+    });
+
+    console.log('Toast widget ready');
+  </script>
+</body>
+</html>

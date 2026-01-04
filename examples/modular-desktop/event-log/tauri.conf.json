@@ -1,0 +1,29 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Event Log",
+  "identifier": "sh.notif.modular-desktop.event-log",
+  "version": "0.1.0",
+  "build": {
+    "frontendDist": "./ui"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Event Log",
+        "width": 450,
+        "height": 600,
+        "x": 400,
+        "y": 60,
+        "resizable": true,
+        "center": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": []
+  }
+}
