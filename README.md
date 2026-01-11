@@ -210,3 +210,5 @@ notif.sh is open source. See [CONTRIBUTING.md](CONTRIBUTING.md) for self-hosting
 ## License
 
 MIT
+
+<!-- Test PR: Verifying CI/CD pipeline -->
