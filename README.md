@@ -33,6 +33,11 @@ pip install notifsh
 cargo add notifsh
 ```
 
+**Go**
+```bash
+go get github.com/filipexyz/notif/pkg/client
+```
+
 ### 3. Publish Events
 
 **CLI**
@@ -63,6 +68,14 @@ use serde_json::json;
 
 let client = Notif::from_env()?;
 client.emit("orders.new", json!({"order_id": "12345", "amount": 99.99})).await?;
+```
+
+**Go**
+```go
+import "github.com/filipexyz/notif/pkg/client"
+
+c := client.New()  // Uses NOTIF_API_KEY env var
+err := c.Emit(ctx, "orders.new", map[string]any{"order_id": "12345", "amount": 99.99})
 ```
 
 ### 4. Request-Response (CLI)
