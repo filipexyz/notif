@@ -2,6 +2,8 @@
 
 **Managed pub/sub for devs who don't want to manage infra.**
 
+> Test edit for PR demonstration
+
 notif.sh is an event hub that centralizes events from any source and reliably delivers them to any consumer. Built for AI agents, automations, and integrations.
 
 ## Quick Start
@@ -210,3 +212,7 @@ notif.sh is open source. See [CONTRIBUTING.md](CONTRIBUTING.md) for self-hosting
 ## License
 
 MIT
+
+## Test Addition
+
+This is a test edit for demonstrating PR functionality.
