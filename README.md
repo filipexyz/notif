@@ -1,5 +1,7 @@
 # notif.sh
 
+<!-- Test PR: This is a demonstration pull request -->
+
 **Managed pub/sub for devs who don't want to manage infra.**
 
 notif.sh is an event hub that centralizes events from any source and reliably delivers them to any consumer. Built for AI agents, automations, and integrations.
