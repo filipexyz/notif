@@ -202,6 +202,7 @@ curl -X POST https://api.notif.sh/api/v1/webhooks \
 - [TypeScript SDK](https://www.npmjs.com/package/notif.sh)
 - [Python SDK](https://pypi.org/project/notifsh)
 - [Rust SDK](https://crates.io/crates/notifsh)
+- [GitHub Repository](https://github.com/filipexyz/notif)
 
 ## Self-Hosting
 
