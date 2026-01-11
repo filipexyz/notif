@@ -210,3 +210,7 @@ notif.sh is open source. See [CONTRIBUTING.md](CONTRIBUTING.md) for self-hosting
 ## License
 
 MIT
+
+---
+
+**Test PR**: This is a test pull request to demonstrate the PR workflow.
