@@ -28,7 +28,7 @@ run: build
 test:
 	go test -v -race ./internal/...
 	cd sdk/typescript && npm test
-	cd sdk/python && pytest
+	cd sdk/python && .venv/bin/pytest
 
 # Run e2e tests (requires Docker)
 test-e2e:
