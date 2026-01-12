@@ -1,4 +1,16 @@
-.PHONY: build build-cli run test generate dev dev-down clean seed migrate migrate-down migrate-status publish-ts publish-py publish-rs publish-sdks
+.PHONY: build build-cli run test generate dev dev-down clean seed migrate migrate-down migrate-status publish-ts publish-py publish-rs publish-sdks install
+
+# Install all dependencies
+install:
+	@echo "Installing Go dependencies..."
+	go mod download
+	@echo "Installing TypeScript SDK dependencies..."
+	cd sdk/typescript && npm install
+	@echo "Installing Python SDK dependencies..."
+	cd sdk/python && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+	@echo "Installing web frontend dependencies..."
+	cd web && npm install
+	@echo "All dependencies installed successfully!"
 
 # Build the server binary
 build:
