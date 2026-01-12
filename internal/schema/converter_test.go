@@ -320,18 +320,16 @@ func TestParseSchemaRef(t *testing.T) {
 			wantVer:  "1.0.0",
 		},
 		{
-			name:     "without @ prefix",
-			ref:      "filipelabs/agent@1.0.0",
-			wantNS:   "filipelabs",
-			wantName: "agent",
-			wantVer:  "1.0.0",
+			name:      "without @ prefix",
+			ref:       "filipelabs/agent@1.0.0",
+			wantError: true, // @ prefix is required
 		},
 		{
 			name:     "without version",
 			ref:      "@filipelabs/agent",
 			wantNS:   "filipelabs",
 			wantName: "agent",
-			wantVer:  "",
+			wantVer:  "latest", // defaults to "latest"
 		},
 		{
 			name:      "invalid format - no slash",
@@ -339,20 +337,24 @@ func TestParseSchemaRef(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:      "invalid format - empty namespace",
-			ref:       "@/agent",
-			wantError: true,
+			name:     "empty namespace allowed",
+			ref:      "@/agent",
+			wantNS:   "",
+			wantName: "agent",
+			wantVer:  "latest",
 		},
 		{
-			name:      "invalid format - empty name",
-			ref:       "@filipelabs/",
-			wantError: true,
+			name:     "empty name allowed",
+			ref:      "@filipelabs/",
+			wantNS:   "filipelabs",
+			wantName: "",
+			wantVer:  "latest",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ns, name, ver, err := ParseSchemaRef(tt.ref)
+			schemaRef, err := ParseSchemaRef(tt.ref)
 			if tt.wantError {
 				if err == nil {
 					t.Error("ParseSchemaRef() expected error, got nil")
@@ -364,14 +366,14 @@ func TestParseSchemaRef(t *testing.T) {
 				t.Fatalf("ParseSchemaRef() error = %v", err)
 			}
 
-			if ns != tt.wantNS {
-				t.Errorf("namespace = %v, want %v", ns, tt.wantNS)
+			if schemaRef.Namespace != tt.wantNS {
+				t.Errorf("namespace = %v, want %v", schemaRef.Namespace, tt.wantNS)
 			}
-			if name != tt.wantName {
-				t.Errorf("name = %v, want %v", name, tt.wantName)
+			if schemaRef.Name != tt.wantName {
+				t.Errorf("name = %v, want %v", schemaRef.Name, tt.wantName)
 			}
-			if ver != tt.wantVer {
-				t.Errorf("version = %v, want %v", ver, tt.wantVer)
+			if schemaRef.Version != tt.wantVer {
+				t.Errorf("version = %v, want %v", schemaRef.Version, tt.wantVer)
 			}
 		})
 	}
