@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/filipexyz/notif/internal/cli/cmd/schema"
+	"github.com/filipexyz/notif/internal/cli/cmd/topic"
 	"github.com/filipexyz/notif/internal/cli/config"
 	"github.com/filipexyz/notif/internal/cli/output"
 	"github.com/filipexyz/notif/pkg/client"
@@ -55,6 +57,10 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default $HOME/.notif/config.json)")
 	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "server URL")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output as JSON")
+
+	// Add commands
+	rootCmd.AddCommand(schema.NewSchemaCmd())
+	rootCmd.AddCommand(topic.NewTopicCmd())
 }
 
 // getClient creates a client with current config.

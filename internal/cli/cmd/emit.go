@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/filipexyz/notif/internal/schema"
 	"github.com/filipexyz/notif/pkg/client"
 	"github.com/itchyny/gojq"
 	"github.com/spf13/cobra"
@@ -76,6 +77,22 @@ The $input variable in --filter references the emitted request data.`,
 		if !json.Valid([]byte(data)) {
 			out.Error("Invalid JSON data")
 			return
+		}
+
+		// Parse JSON data
+		var payload map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &payload); err != nil {
+			out.Error("Failed to parse JSON: %v", err)
+			return
+		}
+
+		// Check for schema binding and validate
+		store, err := schema.NewBindingStore()
+		if err == nil {
+			if err := store.ValidatePayload(topic, payload); err != nil {
+				out.Error("Schema validation failed: %v", err)
+				return
+			}
 		}
 
 		c := getClient()
