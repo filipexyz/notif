@@ -1,0 +1,147 @@
+# Example policy file for a generic organization
+# This demonstrates common access control patterns
+
+org_id: "org_example123"
+version: "1.0"
+description: "Example organization policy with common patterns"
+updated_at: 2024-01-13T00:00:00Z
+
+# Default allow for backward compatibility (can be set to true for stricter control)
+default_deny: false
+
+# Enable audit logging
+audit_enabled: true
+audit_topic: "security.audit"
+audit_denied_only: true  # Only log denied attempts
+audit_include_data: false
+
+topics:
+  # ============================================================================
+  # Public Topics - Anyone Can Access
+  # ============================================================================
+
+  - pattern: "public.>"
+    description: "Public topics accessible to all authenticated users"
+    publish:
+      - identity: "*"
+        description: "All authenticated principals"
+    subscribe:
+      - identity: "*"
+        description: "All authenticated principals"
+
+  # ============================================================================
+  # Service-to-Service Communication
+  # ============================================================================
+
+  - pattern: "service.notifications"
+    description: "Service notifications"
+    publish:
+      - identity: "service-*"
+        type: "api_key"
+        description: "Backend services"
+    subscribe:
+      - identity: "service-*"
+        type: "api_key"
+        description: "Backend services"
+      - identity: "user_*"
+        type: "user"
+        description: "Users can subscribe to service notifications"
+
+  # ============================================================================
+  # User-Specific Topics
+  # ============================================================================
+
+  - pattern: "user.*.inbox"
+    description: "Per-user inbox (e.g., user.john.inbox)"
+    publish:
+      - identity: "service-*"
+        type: "api_key"
+        description: "Services can send to user inboxes"
+    subscribe:
+      - identity: "user_*"
+        type: "user"
+        description: "Users can read their own inbox"
+
+  # ============================================================================
+  # Admin-Only Topics
+  # ============================================================================
+
+  - pattern: "admin.>"
+    description: "Administrative topics"
+    publish:
+      - identity: "admin-*"
+        type: "api_key"
+        description: "Admin services"
+      - identity: "user_admin"
+        type: "user"
+        description: "Admin users"
+    subscribe:
+      - identity: "admin-*"
+        type: "api_key"
+        description: "Admin services"
+      - identity: "user_admin"
+        type: "user"
+        description: "Admin users"
+
+  # ============================================================================
+  # Monitoring and Observability
+  # ============================================================================
+
+  - pattern: "metrics.>"
+    description: "Metrics and monitoring data"
+    publish:
+      - identity: "*"
+        description: "All services can publish metrics"
+    subscribe:
+      - identity: "monitoring-*"
+        type: "api_key"
+        description: "Monitoring tools"
+      - identity: "service-prometheus"
+        type: "api_key"
+        description: "Prometheus scraper"
+
+  # ============================================================================
+  # Webhook Callbacks
+  # ============================================================================
+
+  - pattern: "webhooks.*.callback"
+    description: "Webhook callback events"
+    publish:
+      - identity: "webhook-worker"
+        type: "api_key"
+        description: "Webhook delivery worker"
+    subscribe:
+      - identity: "*"
+        description: "Services can subscribe to webhook callbacks"
+
+  # ============================================================================
+  # Dead Letter Queue - Admin Access Only
+  # ============================================================================
+
+  - pattern: "dlq.>"
+    description: "Dead letter queue topics"
+    publish:
+      - identity: "dlq-worker"
+        type: "api_key"
+        description: "DLQ worker"
+    subscribe:
+      - identity: "admin-*"
+        type: "api_key"
+        description: "Admin services for DLQ management"
+
+  # ============================================================================
+  # Security Audit - Read-Only for Most
+  # ============================================================================
+
+  - pattern: "security.audit"
+    description: "Security audit logs"
+    publish:
+      - identity: "*"
+        description: "System publishes audit events"
+    subscribe:
+      - identity: "security-*"
+        type: "api_key"
+        description: "Security monitoring tools"
+      - identity: "admin-*"
+        type: "api_key"
+        description: "Admin services"

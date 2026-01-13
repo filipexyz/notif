@@ -1,0 +1,29 @@
+# Development policy - minimal restrictions for local testing
+
+org_id: "dev"
+version: "1.0"
+description: "Development policy with minimal restrictions"
+updated_at: 2024-01-13T00:00:00Z
+
+# Allow by default for easier development
+default_deny: false
+
+# Enable audit logging to help debug
+audit_enabled: true
+audit_topic: "security.audit"
+audit_denied_only: false  # Log everything for debugging
+audit_include_data: true  # Include event data for debugging
+
+topics:
+  # Only restrict security-sensitive topics
+  - pattern: "admin.delete.*"
+    description: "Destructive admin operations"
+    publish:
+      - identity: "admin-*"
+        type: "api_key"
+        description: "Admin API keys only"
+    subscribe:
+      - identity: "*"
+        description: "Anyone can subscribe (for testing)"
+
+  # All other topics are allowed by default (default_deny: false)

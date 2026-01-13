@@ -1,0 +1,173 @@
+# Policy file for filipe aí organization
+# This demonstrates strict topic-level access control for the event-driven voice assistant
+
+org_id: "filipe-ai"
+version: "1.0"
+description: "Security policies for filipe aí event-driven architecture"
+updated_at: 2024-01-13T00:00:00Z
+
+# Deny by default - all access must be explicitly allowed
+default_deny: true
+
+# Enable audit logging for security events
+audit_enabled: true
+audit_topic: "security.audit"
+audit_denied_only: false  # Log both allowed and denied attempts
+audit_include_data: false # Don't log event data (privacy)
+
+topics:
+  # ============================================================================
+  # Tool Pipeline - Strict Controls
+  # ============================================================================
+
+  # filipe.tool.request - Only the bot can publish requests
+  - pattern: "filipe.tool.request"
+    description: "Tool execution requests from bot to workers"
+    publish:
+      - identity: "filipe-bot"
+        type: "api_key"
+        description: "Main bot identity"
+    subscribe:
+      - identity: "claude-worker-*"
+        type: "api_key"
+        description: "Claude CLI workers (scalable with wildcard)"
+      - identity: "search-worker"
+        type: "api_key"
+        description: "Dedicated search worker"
+      - identity: "desktop-worker"
+        type: "api_key"
+        description: "Desktop control worker"
+
+  # filipe.tool.response - Only workers can publish responses
+  - pattern: "filipe.tool.response"
+    description: "Tool execution results from workers to bot"
+    publish:
+      - identity: "claude-worker-*"
+        type: "api_key"
+        description: "Claude CLI workers"
+      - identity: "search-worker"
+        type: "api_key"
+        description: "Search worker"
+      - identity: "desktop-worker"
+        type: "api_key"
+        description: "Desktop control worker"
+    subscribe:
+      - identity: "filipe-bot"
+        type: "api_key"
+        description: "Bot receives results"
+
+  # ============================================================================
+  # Development Notifications - Claude Code to Bot
+  # ============================================================================
+
+  - pattern: "filipe.dev"
+    description: "Development notifications from Claude Code"
+    publish:
+      - identity: "claude-code"
+        type: "api_key"
+        description: "Claude Code agent"
+      - identity: "filipe-bot"
+        type: "api_key"
+        description: "Bot can self-notify"
+    subscribe:
+      - identity: "filipe-bot"
+        type: "api_key"
+        description: "Bot listens to dev events"
+
+  # ============================================================================
+  # Calendar Events - Agenda Agent
+  # ============================================================================
+
+  - pattern: "filipe.calendar"
+    description: "Calendar events and reminders"
+    publish:
+      - identity: "filipe-bot"
+        type: "api_key"
+        description: "Bot creates calendar events"
+      - identity: "agenda-worker"
+        type: "api_key"
+        description: "Specialized calendar worker"
+    subscribe:
+      - identity: "filipe-bot"
+        type: "api_key"
+        description: "Bot receives calendar notifications"
+
+  # ============================================================================
+  # Private User Data - Bot Only (Workers CANNOT Access)
+  # ============================================================================
+
+  - pattern: "filipe.user.>"
+    description: "Private user data - bot only, no workers"
+    publish:
+      - identity: "filipe-bot"
+        type: "api_key"
+        description: "Only bot can manage user data"
+    subscribe:
+      - identity: "filipe-bot"
+        type: "api_key"
+        description: "Only bot can read user data"
+    # NOTE: Workers explicitly excluded - no worker identity listed
+
+  - pattern: "filipe.user.facts"
+    description: "User facts extracted from conversations"
+    publish:
+      - identity: "filipe-bot"
+        type: "api_key"
+    subscribe:
+      - identity: "filipe-bot"
+        type: "api_key"
+
+  - pattern: "filipe.user.preferences"
+    description: "User preferences and settings"
+    publish:
+      - identity: "filipe-bot"
+        type: "api_key"
+    subscribe:
+      - identity: "filipe-bot"
+        type: "api_key"
+
+  # ============================================================================
+  # Security Audit Topic - Read Only for Monitoring
+  # ============================================================================
+
+  - pattern: "security.audit"
+    description: "Security audit logs"
+    publish:
+      - identity: "*"
+        type: "api_key"
+        description: "System can publish audit events"
+    subscribe:
+      - identity: "monitoring-*"
+        type: "api_key"
+        description: "Monitoring tools"
+      - identity: "user_*"
+        type: "user"
+        description: "Authenticated users can view audit logs"
+
+  # ============================================================================
+  # Administrative Topics - User Access Only
+  # ============================================================================
+
+  - pattern: "admin.>"
+    description: "Administrative topics for user management"
+    publish:
+      - identity: "user_*"
+        type: "user"
+        description: "Authenticated users"
+    subscribe:
+      - identity: "user_*"
+        type: "user"
+        description: "Authenticated users"
+
+  # ============================================================================
+  # Testing Topics - Development Only
+  # ============================================================================
+
+  - pattern: "test.>"
+    description: "Testing topics for development"
+    publish:
+      - identity: "*"
+        description: "Anyone can publish to test topics"
+    subscribe:
+      - identity: "*"
+        description: "Anyone can subscribe to test topics"

@@ -10,6 +10,7 @@ import (
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/domain"
 	"github.com/filipexyz/notif/internal/nats"
+	"github.com/filipexyz/notif/internal/policy"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nats-io/nats.go/jetstream"
@@ -32,13 +33,15 @@ const (
 
 // Client represents a WebSocket client connection.
 type Client struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	apiKeyID string
-	orgID    string     // Organization ID for multi-tenant isolation
-	clientID string     // Unique client identifier for tracking
-	queries  *db.Queries // For delivery tracking
+	hub         *Hub
+	conn        *websocket.Conn
+	send        chan []byte
+	apiKeyID    string
+	orgID       string          // Organization ID for multi-tenant isolation
+	clientID    string          // Unique client identifier for tracking
+	queries     *db.Queries     // For delivery tracking
+	enforcer    *policy.Enforcer // Policy enforcer for access control
+	principal   *policy.Principal // Authenticated principal
 
 	// Subscription state
 	mu              sync.RWMutex
@@ -53,7 +56,7 @@ type Client struct {
 }
 
 // NewClient creates a new WebSocket client.
-func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, orgID string, dlqPublisher *nats.DLQPublisher, queries *db.Queries, clientID string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, orgID string, dlqPublisher *nats.DLQPublisher, queries *db.Queries, clientID string, enforcer *policy.Enforcer, principal *policy.Principal) *Client {
 	return &Client{
 		hub:             hub,
 		conn:            conn,
@@ -65,6 +68,8 @@ func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, orgID string, dlqPublis
 		pendingMessages: make(map[string]*pendingMsg),
 		maxRetries:      5,
 		dlqPublisher:    dlqPublisher,
+		enforcer:        enforcer,
+		principal:       principal,
 	}
 }
 
@@ -176,6 +181,24 @@ func (c *Client) handleSubscribe(ctx context.Context, msg *SubscribeMessage, con
 	if c.orgID == "" {
 		c.sendError("UNAUTHORIZED", "org_id is required for subscriptions")
 		return
+	}
+
+	// Check policy permissions for each topic
+	if c.enforcer != nil && c.principal != nil {
+		for _, topic := range msg.Topics {
+			result := c.enforcer.CheckSubscribe(*c.principal, topic)
+			if !result.Allowed {
+				slog.Warn("subscribe denied by policy",
+					"org_id", c.orgID,
+					"principal_type", c.principal.Type,
+					"principal_id", c.principal.ID,
+					"topic", topic,
+					"reason", result.Reason,
+				)
+				c.sendError("PERMISSION_DENIED", "permission denied for topic "+topic+": "+result.Reason)
+				return
+			}
+		}
 	}
 
 	// Parse options

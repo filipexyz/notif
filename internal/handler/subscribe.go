@@ -10,6 +10,7 @@ import (
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/middleware"
 	"github.com/filipexyz/notif/internal/nats"
+	"github.com/filipexyz/notif/internal/policy"
 	"github.com/filipexyz/notif/internal/websocket"
 	"github.com/google/uuid"
 	ws "github.com/gorilla/websocket"
@@ -30,15 +31,17 @@ type SubscribeHandler struct {
 	consumerMgr  *nats.ConsumerManager
 	dlqPublisher *nats.DLQPublisher
 	queries      *db.Queries
+	enforcer     *policy.Enforcer
 }
 
 // NewSubscribeHandler creates a new SubscribeHandler.
-func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, dlqPublisher *nats.DLQPublisher, queries *db.Queries) *SubscribeHandler {
+func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, dlqPublisher *nats.DLQPublisher, queries *db.Queries, enforcer *policy.Enforcer) *SubscribeHandler {
 	return &SubscribeHandler{
 		hub:          hub,
 		consumerMgr:  consumerMgr,
 		dlqPublisher: dlqPublisher,
 		queries:      queries,
+		enforcer:     enforcer,
 	}
 }
 
@@ -70,8 +73,24 @@ func (h *SubscribeHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		orgID = authCtx.OrgID
 	}
 
+	// Build principal for policy checks
+	var principal *policy.Principal
+	if authCtx != nil {
+		p := policy.Principal{
+			OrgID: authCtx.OrgID,
+		}
+		if authCtx.APIKeyID != nil {
+			p.Type = policy.PrincipalAPIKey
+			p.ID = authCtx.APIKeyID.String()
+		} else if authCtx.UserID != nil {
+			p.Type = policy.PrincipalUser
+			p.ID = *authCtx.UserID
+		}
+		principal = &p
+	}
+
 	clientID := generateClientID()
-	client := websocket.NewClient(h.hub, conn, apiKeyID, orgID, h.dlqPublisher, h.queries, clientID)
+	client := websocket.NewClient(h.hub, conn, apiKeyID, orgID, h.dlqPublisher, h.queries, clientID, h.enforcer, principal)
 	h.hub.Register(client)
 
 	slog.Info("websocket client connected", "client_id", clientID)

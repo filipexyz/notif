@@ -49,11 +49,11 @@ func (s *Server) routes() http.Handler {
 	// Unified auth: accepts both API key (Bearer nsh_xxx) and Clerk JWT
 	// ================================================================
 	publisher := nats.NewPublisher(s.nats.JetStream())
-	emitHandler := handler.NewEmitHandler(publisher, queries)
+	emitHandler := handler.NewEmitHandler(publisher, queries, s.policyEnforcer)
 
 	consumerMgr := nats.NewConsumerManager(s.nats.Stream())
 	dlqPublisher := nats.NewDLQPublisher(s.nats.JetStream())
-	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr, dlqPublisher, queries)
+	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr, dlqPublisher, queries, s.policyEnforcer)
 
 	dlqReader, _ := nats.NewDLQReader(s.nats.JetStream())
 	dlqHandler := handler.NewDLQHandler(dlqReader, publisher)

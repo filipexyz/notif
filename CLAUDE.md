@@ -7,6 +7,7 @@ Managed pub/sub event hub with webhooks, DLQ, and real-time subscriptions.
 - **Backend**: Go, Chi router, NATS JetStream
 - **Database**: PostgreSQL (sqlc)
 - **Auth**: Clerk (JWT) + API keys (`nsh_xxx`)
+- **Security**: Filesystem-based topic-level access control
 - **Frontend**: TanStack Start (see `web/CLAUDE.md`)
 
 ## Project Structure
@@ -19,6 +20,7 @@ Managed pub/sub event hub with webhooks, DLQ, and real-time subscriptions.
 │   ├── server/         # HTTP server, routes
 │   ├── handler/        # Request handlers
 │   ├── middleware/     # Auth (unified, clerk)
+│   ├── policy/         # Access control policies (NEW)
 │   ├── nats/           # NATS JetStream (publisher, consumer, DLQ)
 │   ├── websocket/      # WebSocket hub
 │   ├── db/             # sqlc generated code
@@ -111,6 +113,36 @@ make migrate      # Run migrations
 make generate     # Run sqlc generate
 ```
 
+## Security
+
+notif.sh includes **filesystem-based topic-level access control**:
+
+- **Policy files**: YAML files in `/etc/notif/policies/{org_id}.yaml`
+- **Hot-reload**: Policies update automatically when files change
+- **Wildcards**: Flexible topic (`user.*`, `admin.>`) and identity (`worker-*`) patterns
+- **Audit logging**: Security events published to `security.audit` topic
+- **Backward compatible**: No policy = allow by default
+
+Example policy:
+
+```yaml
+org_id: "acme-corp"
+version: "1.0"
+default_deny: true
+audit_enabled: true
+
+topics:
+  - pattern: "admin.*"
+    publish:
+      - identity: "admin-*"
+        type: "api_key"
+    subscribe:
+      - identity: "admin-*"
+        type: "api_key"
+```
+
+See [docs/SECURITY.md](docs/SECURITY.md) for full documentation.
+
 ## Environment
 
 ```
@@ -118,4 +150,5 @@ DATABASE_URL=postgres://...
 NATS_URL=nats://localhost:4222
 CLERK_SECRET_KEY=sk_...
 PORT=8080
+NOTIF_POLICY_DIR=/etc/notif/policies  # Optional, default shown
 ```

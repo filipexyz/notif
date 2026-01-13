@@ -10,6 +10,7 @@ import (
 	"github.com/filipexyz/notif/internal/domain"
 	"github.com/filipexyz/notif/internal/middleware"
 	"github.com/filipexyz/notif/internal/nats"
+	"github.com/filipexyz/notif/internal/policy"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -19,13 +20,15 @@ const maxPayloadSize = 64 * 1024 // 64KB
 type EmitHandler struct {
 	publisher *nats.Publisher
 	queries   *db.Queries
+	enforcer  *policy.Enforcer
 }
 
 // NewEmitHandler creates a new EmitHandler.
-func NewEmitHandler(publisher *nats.Publisher, queries *db.Queries) *EmitHandler {
+func NewEmitHandler(publisher *nats.Publisher, queries *db.Queries, enforcer *policy.Enforcer) *EmitHandler {
 	return &EmitHandler{
 		publisher: publisher,
 		queries:   queries,
+		enforcer:  enforcer,
 	}
 }
 
@@ -61,6 +64,25 @@ func (h *EmitHandler) Emit(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
 	if authCtx != nil {
 		event.OrgID = authCtx.OrgID
+	}
+
+	// Check policy permissions
+	if h.enforcer != nil && authCtx != nil {
+		principal := h.buildPrincipal(authCtx, r)
+		result := h.enforcer.CheckPublish(principal, req.Topic)
+		if !result.Allowed {
+			slog.Warn("publish denied by policy",
+				"org_id", authCtx.OrgID,
+				"principal_type", principal.Type,
+				"principal_id", principal.ID,
+				"topic", req.Topic,
+				"reason", result.Reason,
+			)
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"error": "permission denied: " + result.Reason,
+			})
+			return
+		}
 	}
 
 	// Publish to NATS
@@ -126,6 +148,23 @@ type validationError struct {
 
 func (e *validationError) Error() string {
 	return e.msg
+}
+
+func (h *EmitHandler) buildPrincipal(authCtx *middleware.AuthContext, r *http.Request) policy.Principal {
+	principal := policy.Principal{
+		OrgID: authCtx.OrgID,
+	}
+
+	// Determine principal type and ID
+	if authCtx.APIKeyID != nil {
+		principal.Type = policy.PrincipalAPIKey
+		principal.ID = authCtx.APIKeyID.String()
+	} else if authCtx.UserID != nil {
+		principal.Type = policy.PrincipalUser
+		principal.ID = *authCtx.UserID
+	}
+
+	return principal
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
