@@ -34,5 +34,8 @@ venv/
 dist/
 target/
 
-# Tauri
-gen/schemas/
+# Tauri generated
+**/gen/schemas/
+
+# Test files
+test-hook.txt

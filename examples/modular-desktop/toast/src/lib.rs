@@ -80,10 +80,12 @@ async fn start_permission_subscription(app: AppHandle, client: Arc<Notif>) {
 async fn respond_permission(
     decision: String,
     message: Option<String>,
+    session_id: Option<String>,
     client: State<'_, NotifClient>,
 ) -> Result<(), String> {
     let response = if decision == "allow" {
         json!({
+            "session_id": session_id,
             "hookSpecificOutput": {
                 "hookEventName": "PermissionRequest",
                 "decision": { "behavior": "allow" }
@@ -91,6 +93,7 @@ async fn respond_permission(
         })
     } else {
         json!({
+            "session_id": session_id,
             "hookSpecificOutput": {
                 "hookEventName": "PermissionRequest",
                 "decision": {

@@ -603,6 +603,7 @@
       const name = request.tool_name || 'Unknown Tool';
       const input = request.tool_input || {};
       const cwd = request.cwd || '';
+      currentSessionId = request.session_id || null;
 
       toolName.textContent = name;
 
@@ -666,6 +667,7 @@
     const customText = document.getElementById('customText');
     const timeoutBar = document.getElementById('timeoutBar');
     let customMode = false;
+    let currentSessionId = null;
 
     // Timeout handling
     const PERMISSION_TIMEOUT = 45000; // 45 seconds
@@ -753,7 +755,7 @@
       clearPermissionTimeout();
       await hidePermission();
       try {
-        await invoke('respond_permission', { decision, message });
+        await invoke('respond_permission', { decision, message, session_id: currentSessionId });
       } catch (err) {
         console.error('Failed to respond:', err);
       }
