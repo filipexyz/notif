@@ -1,0 +1,31 @@
+schemas:
+  PermissionRequest:
+    current: 1.0.0
+    history:
+      - version: 1.0.0
+        hash: eac7a48a2b0c
+  SessionInfo:
+    current: 1.0.0
+    history:
+      - version: 1.0.0
+        hash: 2e294b8f4e81
+  PermissionResponse:
+    current: 1.0.0
+    history:
+      - version: 1.0.0
+        hash: 13ad9d79b514
+  AgentEvent:
+    current: 1.0.0
+    history:
+      - version: 1.0.0
+        hash: 60f463cd9399
+  Agent:
+    current: 1.0.0
+    history:
+      - version: 1.0.0
+        hash: 82c9ea24c3d5
+  AgentMessage:
+    current: 1.0.0
+    history:
+      - version: 1.0.0
+        hash: c92e8dedbe1b

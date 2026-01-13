@@ -1,0 +1,29 @@
+name: PermissionResponse
+version: 1.0.0
+description: Permission response sent back to Claude Code hook
+
+fields:
+  sessionId:
+    type: string
+    description: Claude Code session identifier
+
+  hookSpecificOutput:
+    type: object
+    required: true
+    properties:
+      hookEventName:
+        type: string
+        required: true
+        description: Always "PermissionRequest"
+      decision:
+        type: object
+        required: true
+        properties:
+          behavior:
+            type: enum
+            values: [allow, deny]
+            required: true
+            description: Whether to allow or deny the permission
+          message:
+            type: string
+            description: Denial message (only used when behavior is deny)

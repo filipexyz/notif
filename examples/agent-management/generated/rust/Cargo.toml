@@ -1,0 +1,9 @@
+[package]
+name = "agent-management-types"
+version = "1.0.0"
+edition = "2021"
+description = "Generated schemas by schem"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

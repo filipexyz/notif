@@ -1,0 +1,78 @@
+{
+  "name": "Agent",
+  "version": "1.0.0",
+  "description": "An agent that can be discovered and controlled remotely",
+  "fields": {
+    "name": {
+      "type": "string",
+      "required": true,
+      "description": "Unique agent name (e.g., \"coder-1\", \"researcher\")"
+    },
+    "description": {
+      "type": "string",
+      "description": "What this agent does"
+    },
+    "hostname": {
+      "type": "string",
+      "description": "Machine hostname where agent is running"
+    },
+    "tags": {
+      "type": "array",
+      "description": "Capabilities/skills tags (e.g., [\"typescript\", \"react\"])",
+      "items": "string"
+    },
+    "executor": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "enum",
+          "values": [
+            "claude",
+            "codex",
+            "gemini",
+            "custom"
+          ],
+          "description": "The executor type"
+        },
+        "version": {
+          "type": "string",
+          "description": "Model or CLI version"
+        },
+        "cli": {
+          "type": "string",
+          "description": "Command to invoke (e.g., \"claude\")"
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "Working directory"
+        },
+        "repo": {
+          "type": "string",
+          "description": "Git repo (e.g., \"filipexyz/notif\")"
+        }
+      }
+    },
+    "status": {
+      "type": "enum",
+      "values": [
+        "idle",
+        "busy",
+        "offline"
+      ],
+      "default": "idle",
+      "description": "Current agent status"
+    },
+    "activeSessionId": {
+      "type": "string",
+      "description": "Currently running session ID if busy"
+    }
+  }
+}
