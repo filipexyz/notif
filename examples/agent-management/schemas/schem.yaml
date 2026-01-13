@@ -1,0 +1,12 @@
+version: 1
+output: ./generated
+languages:
+  - typescript
+  - rust
+  - llm
+
+packages:
+  typescript:
+    name: "@notif/agent-management"
+  rust:
+    name: "agent-management-types"

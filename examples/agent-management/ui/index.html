@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Management</title>
+  <script src="https://cdn.jsdelivr.net/npm/diff@5.1.0/dist/diff.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      background: transparent;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    /* Tab bar */
+    .tab-bar {
+      display: none;
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(30, 30, 63, 0.95);
+      border-radius: 10px;
+      padding: 4px;
+      gap: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 1000;
+      backdrop-filter: blur(10px);
+    }
+    .tab-bar.visible { display: flex; }
+    .tab {
+      padding: 8px 16px;
+      border-radius: 8px;
+      color: #888;
+      font-size: 0.8rem;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
+    }
+    .tab:hover { background: rgba(255, 255, 255, 0.05); color: #aaa; }
+    .tab.active {
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+    }
+    .tab .badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: #ef4444;
+      color: #fff;
+      font-size: 0.6rem;
+      padding: 2px 5px;
+      border-radius: 8px;
+      min-width: 16px;
+      text-align: center;
+    }
+    .tab .badge.busy { background: #f59e0b; }
+
+    /* Permission prompt */
+    .permission {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: fit-content;
+      min-width: 400px;
+      max-width: 90vw;
+      max-height: 80vh;
+      padding: 20px;
+      border-radius: 12px;
+      background: rgba(30, 30, 63, 0.98);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      animation: fadeIn 0.2s ease-out;
+      overflow-y: auto;
+    }
+    .permission.wide { min-width: 500px; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+    .permission.visible { display: block; }
+    .permission-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .permission-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: #f59e0b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .permission-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #fff;
+    }
+    .permission-subtitle {
+      font-size: 0.7rem;
+      color: #888;
+    }
+    .permission-content {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      padding: 8px;
+      margin-bottom: 10px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      max-height: 60vh;
+      overflow: auto;
+    }
+    .permission-content .tool-name {
+      color: #f59e0b;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .permission-content pre {
+      color: #aaa;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 0;
+    }
+
+    /* Diff view styling */
+    .diff-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+    }
+    .diff-row { border-left: 3px solid transparent; }
+    .diff-row:hover { background: rgba(255, 255, 255, 0.02); }
+    .diff-row.added { background: rgba(34, 197, 94, 0.1); border-left-color: rgba(34, 197, 94, 0.5); }
+    .diff-row.removed { background: rgba(239, 68, 68, 0.1); border-left-color: rgba(239, 68, 68, 0.5); }
+    .diff-linenum {
+      width: 40px;
+      padding: 2px 8px;
+      text-align: right;
+      color: #555;
+      user-select: none;
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .diff-row:hover .diff-linenum { color: #888; }
+    .diff-sign { width: 20px; padding: 2px 4px; text-align: center; font-weight: bold; user-select: none; }
+    .diff-row.added .diff-sign { color: #4ade80; }
+    .diff-row.removed .diff-sign { color: #f87171; }
+    .diff-row.unchanged .diff-sign { color: #444; }
+    .diff-content { padding: 2px 12px; white-space: pre-wrap; word-break: break-all; }
+    .diff-row.added .diff-content { color: rgba(74, 222, 128, 0.9); }
+    .diff-row.removed .diff-content { color: rgba(248, 113, 113, 0.9); }
+    .diff-row.unchanged .diff-content { color: #777; }
+    .word-added { background: rgba(34, 197, 94, 0.3); color: #bbf7d0; border-radius: 2px; padding: 0 2px; }
+    .word-removed { background: rgba(239, 68, 68, 0.3); color: #fecaca; border-radius: 2px; padding: 0 2px; }
+
+    .permission-custom { margin-bottom: 10px; }
+    .permission-custom input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      background: rgba(0,0,0,0.3);
+      color: #fff;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .permission-custom input:focus { border-color: #f59e0b; }
+    .permission-timeout {
+      margin-top: 10px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .permission-timeout-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #f59e0b, #ef4444);
+      width: 100%;
+      transition: width 0.1s linear;
+    }
+    .permission-hint {
+      text-align: center;
+      font-size: 0.65rem;
+      color: #555;
+      margin-top: 8px;
+    }
+    .permission-buttons { display: flex; gap: 8px; }
+    .permission-buttons button {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-allow {
+      background: #22c55e;
+      color: #fff;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+    }
+    .btn-allow:hover { background: #16a34a; box-shadow: 0 0 16px rgba(34, 197, 94, 0.5); }
+    .btn-deny {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .btn-deny:hover { background: rgba(239, 68, 68, 0.3); }
+
+    /* Agents view */
+    .agents-container {
+      display: none;
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 450px;
+      max-height: 70vh;
+      background: rgba(30, 30, 63, 0.98);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+    }
+    .agents-container.visible { display: block; }
+    .agents-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .agents-header h2 { color: #fff; font-size: 0.95rem; margin: 0; font-weight: 500; }
+    .btn-discover {
+      padding: 6px 12px;
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+    .btn-discover:hover { background: rgba(99, 102, 241, 0.3); }
+    .agent-list { max-height: 400px; overflow-y: auto; }
+    .agent-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .agent-item:hover { background: rgba(255, 255, 255, 0.05); }
+    .agent-item.selected { background: rgba(99, 102, 241, 0.15); }
+    .agent-name { color: #fff; font-weight: 500; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+    .agent-status { width: 8px; height: 8px; border-radius: 50%; }
+    .agent-status.idle { background: #22c55e; }
+    .agent-status.busy { background: #f59e0b; }
+    .agent-status.offline { background: #6b7280; }
+    .agent-meta { color: #666; font-size: 0.75rem; margin-top: 4px; }
+    .agent-tags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+    .agent-tag {
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+    }
+    .empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      color: #666;
+      font-size: 0.85rem;
+    }
+
+    /* Chat view */
+    .chat-container {
+      display: none;
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 550px;
+      height: 500px;
+      max-height: 70vh;
+      background: rgba(30, 30, 63, 0.98);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+      flex-direction: column;
+    }
+    .chat-container.visible { display: flex; }
+    .chat-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .chat-agent-name { color: #fff; font-weight: 500; font-size: 0.9rem; }
+    .chat-status { color: #888; font-size: 0.7rem; margin-top: 2px; }
+    .chat-status.running { color: #f59e0b; }
+    .chat-status.completed { color: #22c55e; }
+    .chat-status.failed { color: #ef4444; }
+    .btn-cancel {
+      padding: 4px 10px;
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.7rem;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .chat-message {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+    .chat-message.user {
+      align-self: flex-end;
+      background: rgba(99, 102, 241, 0.3);
+      color: #e0e7ff;
+    }
+    .chat-message.agent {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.1);
+      color: #ccc;
+    }
+    .chat-message.completed { border-left: 3px solid #22c55e; }
+    .chat-message.failed { border-left: 3px solid #ef4444; }
+    .chat-message.blocked { border-left: 3px solid #f59e0b; }
+    .chat-pr-link {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 4px 8px;
+      background: rgba(34, 197, 94, 0.2);
+      color: #86efac;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 0.75rem;
+    }
+    .chat-cost { font-size: 0.7rem; color: #888; margin-top: 4px; }
+    .chat-input-area {
+      padding: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      gap: 8px;
+    }
+    .chat-input {
+      flex: 1;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .chat-input:focus { border-color: #6366f1; }
+    .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
+    .chat-send {
+      padding: 10px 16px;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.85rem;
+    }
+    .chat-send:disabled { background: #4b5563; cursor: not-allowed; }
+    .chat-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Tab Bar -->
+  <div class="tab-bar" id="tabBar">
+    <div class="tab active" data-view="permissions">
+      Permissions
+      <span class="badge" id="permBadge" style="display:none;">0</span>
+    </div>
+    <div class="tab" data-view="agents">
+      Agents
+      <span class="badge busy" id="agentBadge" style="display:none;">0</span>
+    </div>
+    <div class="tab" data-view="chat">Chat</div>
+  </div>
+
+  <!-- Permissions View -->
+  <div class="permission" id="permission">
+    <div class="permission-header">
+      <div class="permission-icon">&#9889;</div>
+      <div>
+        <div class="permission-title">Permission Request</div>
+        <div class="permission-subtitle" id="permSubtitle">Claude Code wants to run a tool</div>
+      </div>
+    </div>
+    <div class="permission-content">
+      <div class="tool-name" id="toolName">Tool</div>
+      <pre id="toolInput">{}</pre>
+    </div>
+    <div class="permission-custom" id="customInput" style="display:none;">
+      <input type="text" id="customText" placeholder="Reason for denial..." />
+    </div>
+    <div class="permission-buttons">
+      <button class="btn-deny" id="btnDeny">Deny (Esc)</button>
+      <button class="btn-allow" id="btnAllow">Allow (Enter)</button>
+    </div>
+    <div class="permission-timeout">
+      <div class="permission-timeout-bar" id="timeoutBar"></div>
+    </div>
+    <div class="permission-hint">Tab for custom deny message</div>
+  </div>
+
+  <!-- Agents View -->
+  <div class="agents-container" id="agentsView">
+    <div class="agents-header">
+      <h2>Available Agents</h2>
+      <button class="btn-discover" id="btnDiscover">Discover</button>
+    </div>
+    <div class="agent-list" id="agentList">
+      <div class="empty-state">No agents found. Click Discover to find agents.</div>
+    </div>
+  </div>
+
+  <!-- Chat View -->
+  <div class="chat-container" id="chatView">
+    <div class="chat-header">
+      <div>
+        <div class="chat-agent-name" id="chatAgentName">Select an agent</div>
+        <div class="chat-status" id="chatStatus">No active session</div>
+      </div>
+      <button class="btn-cancel" id="btnCancelSession" style="display:none;">Cancel</button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <div class="chat-empty" id="chatEmpty">
+        <p>Select an agent from the Agents tab to start a conversation</p>
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <input type="text" class="chat-input" id="chatInput" placeholder="Send a prompt..." disabled>
+      <button class="chat-send" id="btnSend" disabled>Send</button>
+    </div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { listen } = window.__TAURI__.event;
+
+    // ============== STATE ==============
+    let currentView = 'permissions';
+    let sessions = [];
+    let activeSessionId = null;
+    let currentPermission = null;
+    let customMode = false;
+    let agents = {};
+    let selectedAgent = null;
+    let activeSession = null;
+
+    const TIMEOUT_MS = 45000;
+    let permissionTimeout = null;
+    let timeoutInterval = null;
+    let timeoutStart = null;
+
+    // ============== DOM ELEMENTS ==============
+    const tabBar = document.getElementById('tabBar');
+    const tabs = document.querySelectorAll('.tab');
+    const permission = document.getElementById('permission');
+    const permSubtitle = document.getElementById('permSubtitle');
+    const toolName = document.getElementById('toolName');
+    const toolInput = document.getElementById('toolInput');
+    const btnAllow = document.getElementById('btnAllow');
+    const btnDeny = document.getElementById('btnDeny');
+    const customInputDiv = document.getElementById('customInput');
+    const customText = document.getElementById('customText');
+    const timeoutBar = document.getElementById('timeoutBar');
+    const permBadge = document.getElementById('permBadge');
+    const agentBadge = document.getElementById('agentBadge');
+    const agentsView = document.getElementById('agentsView');
+    const agentList = document.getElementById('agentList');
+    const btnDiscover = document.getElementById('btnDiscover');
+    const chatView = document.getElementById('chatView');
+    const chatAgentName = document.getElementById('chatAgentName');
+    const chatStatus = document.getElementById('chatStatus');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatEmpty = document.getElementById('chatEmpty');
+    const chatInput = document.getElementById('chatInput');
+    const btnSend = document.getElementById('btnSend');
+    const btnCancelSession = document.getElementById('btnCancelSession');
+
+    // ============== HELPERS ==============
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function getLanguage(filePath) {
+      if (!filePath) return null;
+      const ext = filePath.split('.').pop().toLowerCase();
+      const langMap = {
+        'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'tsx': 'typescript',
+        'rs': 'rust', 'go': 'go', 'py': 'python', 'rb': 'ruby',
+        'html': 'html', 'css': 'css', 'scss': 'scss', 'json': 'json',
+        'yaml': 'yaml', 'yml': 'yaml', 'md': 'markdown', 'sql': 'sql',
+        'sh': 'bash', 'bash': 'bash', 'zsh': 'bash',
+        'toml': 'toml', 'xml': 'xml',
+      };
+      return langMap[ext] || null;
+    }
+
+    function highlightCode(content, language) {
+      if (!language || typeof hljs === 'undefined') return escapeHtml(content);
+      try { return hljs.highlight(content, { language }).value; }
+      catch (e) { return escapeHtml(content); }
+    }
+
+    function calculateDiff(oldStr, newStr) {
+      const changes = Diff.diffLines(oldStr, newStr);
+      const lines = [];
+      let oldLineCounter = 1, newLineCounter = 1;
+
+      for (let i = 0; i < changes.length; i++) {
+        const change = changes[i];
+        const currentLines = change.value.replace(/\n$/, '').split('\n');
+
+        if (change.removed && i + 1 < changes.length && changes[i + 1].added) {
+          const nextChange = changes[i + 1];
+          const nextLines = nextChange.value.replace(/\n$/, '').split('\n');
+
+          if (currentLines.length === nextLines.length) {
+            for (let j = 0; j < currentLines.length; j++) {
+              const wordDiff = Diff.diffWordsWithSpace(currentLines[j], nextLines[j]);
+              lines.push({ type: 'removed', content: currentLines[j], oldLineNumber: oldLineCounter++, words: wordDiff.filter(p => !p.added) });
+              lines.push({ type: 'added', content: nextLines[j], newLineNumber: newLineCounter++, words: wordDiff.filter(p => !p.removed) });
+            }
+            i++;
+            continue;
+          }
+        }
+
+        currentLines.forEach(lineContent => {
+          if (change.added) lines.push({ type: 'added', content: lineContent, newLineNumber: newLineCounter++ });
+          else if (change.removed) lines.push({ type: 'removed', content: lineContent, oldLineNumber: oldLineCounter++ });
+          else lines.push({ type: 'unchanged', content: lineContent, oldLineNumber: oldLineCounter++, newLineNumber: newLineCounter++ });
+        });
+      }
+      return lines;
+    }
+
+    function renderDiff(oldStr, newStr, filePath) {
+      const lines = calculateDiff(oldStr, newStr);
+      const language = getLanguage(filePath);
+      let html = '<table class="diff-table"><tbody>';
+
+      for (const line of lines) {
+        const sign = line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' ';
+        let contentHtml;
+        if (line.words) {
+          contentHtml = line.words.map(part => {
+            const highlighted = highlightCode(part.value, language);
+            if (part.added) return `<span class="word-added">${highlighted}</span>`;
+            if (part.removed) return `<span class="word-removed">${highlighted}</span>`;
+            return highlighted;
+          }).join('');
+        } else {
+          contentHtml = highlightCode(line.content, language);
+        }
+        html += `<tr class="diff-row ${line.type}">
+          <td class="diff-linenum">${line.oldLineNumber || ''}</td>
+          <td class="diff-linenum">${line.newLineNumber || ''}</td>
+          <td class="diff-sign">${sign}</td>
+          <td class="diff-content">${contentHtml}</td>
+        </tr>`;
+      }
+      return html + '</tbody></table>';
+    }
+
+    function getRelativePath(filePath, cwd) {
+      if (!filePath) return 'file';
+      if (cwd && filePath.startsWith(cwd)) return filePath.slice(cwd.length + 1);
+      const parts = filePath.split('/');
+      if (parts.length > 4) return '.../' + parts.slice(-3).join('/');
+      return filePath.replace(/^\/Users\/[^/]+\//, '~/');
+    }
+
+    // ============== VIEW MANAGEMENT ==============
+    function switchView(view, fromEvent = false) {
+      if (currentView === view) return; // Prevent redundant switches
+      currentView = view;
+      tabs.forEach(t => t.classList.toggle('active', t.dataset.view === view));
+
+      // Hide all views first
+      permission.classList.remove('visible');
+      agentsView.classList.remove('visible');
+      chatView.classList.remove('visible');
+
+      // Show appropriate view
+      if (view === 'permissions' && currentPermission) {
+        permission.classList.add('visible');
+      } else if (view === 'agents') {
+        agentsView.classList.add('visible');
+      } else if (view === 'chat') {
+        chatView.classList.add('visible');
+      }
+
+      // Only sync to backend if this wasn't triggered by backend event
+      if (!fromEvent) {
+        invoke('set_view', { view });
+      }
+    }
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => switchView(tab.dataset.view));
+    });
+
+    // ============== PERMISSION HANDLING ==============
+    function startPermissionTimeout() {
+      clearPermissionTimeout();
+      timeoutStart = Date.now();
+      timeoutBar.style.width = '100%';
+      timeoutInterval = setInterval(() => {
+        const elapsed = Date.now() - timeoutStart;
+        const remaining = Math.max(0, 1 - elapsed / TIMEOUT_MS);
+        timeoutBar.style.width = `${remaining * 100}%`;
+      }, 100);
+      permissionTimeout = setTimeout(async () => {
+        clearPermissionTimeout();
+        await handlePermission('deny', 'Timeout - auto denied after 45s');
+      }, TIMEOUT_MS);
+    }
+
+    function clearPermissionTimeout() {
+      if (permissionTimeout) { clearTimeout(permissionTimeout); permissionTimeout = null; }
+      if (timeoutInterval) { clearInterval(timeoutInterval); timeoutInterval = null; }
+    }
+
+    async function refreshAndLoadNext() {
+      try {
+        sessions = await invoke('get_sessions');
+        updateBadges();
+
+        if (sessions.length === 0) {
+          activeSessionId = null;
+          currentPermission = null;
+          permission.classList.remove('visible');
+          if (currentView === 'permissions') {
+            await invoke('hide_window');
+          }
+          return;
+        }
+
+        if (!activeSessionId || !sessions.find(s => s.session_id === activeSessionId)) {
+          activeSessionId = sessions[0].session_id;
+        }
+
+        currentPermission = await invoke('get_current_permission', { sessionId: activeSessionId });
+
+        if (currentPermission) {
+          showPermission(currentPermission);
+        } else {
+          activeSessionId = null;
+          await refreshAndLoadNext();
+        }
+      } catch (e) {
+        console.error('Failed to refresh:', e);
+      }
+    }
+
+    async function showPermission(request) {
+      permission.classList.remove('wide');
+      const name = request.tool_name || 'Unknown Tool';
+      const input = request.tool_input || {};
+      const cwd = request.cwd || '';
+
+      toolName.textContent = name;
+      const getPath = (filePath) => getRelativePath(filePath, cwd);
+
+      if (name === 'Edit' && input.old_string && input.new_string) {
+        permission.classList.add('wide');
+        toolName.textContent = `Edit: ${getPath(input.file_path)}`;
+        toolInput.innerHTML = renderDiff(input.old_string, input.new_string, input.file_path);
+      } else if (name === 'Write') {
+        toolName.textContent = `Write: ${getPath(input.file_path)}`;
+        const content = input.content || '';
+        toolInput.textContent = content.length > 200 ? content.slice(0, 200) + '...' : content;
+      } else if (name === 'Bash') {
+        toolInput.textContent = input.command || JSON.stringify(input, null, 2);
+      } else if (name === 'Read') {
+        toolName.textContent = `Read: ${getPath(input.file_path)}`;
+        toolInput.textContent = input.file_path || '';
+      } else {
+        toolInput.textContent = JSON.stringify(input, null, 2);
+      }
+
+      if (cwd) {
+        permSubtitle.textContent = cwd.replace(/^\/Users\/[^/]+/, '~');
+      } else {
+        permSubtitle.textContent = 'Claude Code wants to run a tool';
+      }
+
+      if (currentView === 'permissions') {
+        permission.classList.add('visible');
+      }
+      tabBar.classList.add('visible');
+      await invoke('show_window');
+      startPermissionTimeout();
+      window.focus();
+    }
+
+    async function hidePermission() {
+      clearPermissionTimeout();
+      permission.classList.remove('visible');
+      currentPermission = null;
+    }
+
+    async function handlePermission(decision, message = null) {
+      if (!activeSessionId) return;
+      clearPermissionTimeout();
+      resetCustomMode();
+
+      try {
+        await invoke('respond_permission', { sessionId: activeSessionId, decision, message });
+      } catch (err) {
+        console.error('Failed to respond:', err);
+      }
+
+      await hidePermission();
+      await refreshAndLoadNext();
+    }
+
+    function resetCustomMode() {
+      customMode = false;
+      customInputDiv.style.display = 'none';
+      customText.value = '';
+      btnAllow.style.display = '';
+      btnDeny.textContent = 'Deny (Esc)';
+    }
+
+    btnAllow.addEventListener('click', () => handlePermission('allow'));
+    btnDeny.addEventListener('click', () => {
+      if (customMode) handlePermission('deny', customText.value.trim() || null);
+      else handlePermission('deny');
+    });
+
+    // ============== AGENTS ==============
+    function renderAgents() {
+      const agentsList = Object.values(agents);
+      if (agentsList.length === 0) {
+        agentList.innerHTML = '<div class="empty-state">No agents found. Click Discover to find agents.</div>';
+        return;
+      }
+
+      agentList.innerHTML = agentsList.map(agent => `
+        <div class="agent-item ${selectedAgent === agent.name ? 'selected' : ''}" data-agent="${agent.name}">
+          <div class="agent-name">
+            <span class="agent-status ${agent.status || 'offline'}"></span>
+            ${escapeHtml(agent.name)}
+          </div>
+          <div class="agent-meta">
+            ${agent.hostname || 'Unknown host'}${agent.project?.repo ? ` - ${agent.project.repo}` : ''}
+          </div>
+          ${agent.tags?.length ? `<div class="agent-tags">${agent.tags.map(t => `<span class="agent-tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+        </div>
+      `).join('');
+
+      document.querySelectorAll('.agent-item').forEach(item => {
+        item.addEventListener('click', () => selectAgentHandler(item.dataset.agent));
+      });
+    }
+
+    async function selectAgentHandler(name) {
+      selectedAgent = name;
+      await invoke('select_agent', { agentName: name });
+      renderAgents();
+      switchView('chat');
+      updateChatUI();
+    }
+
+    btnDiscover.addEventListener('click', async () => {
+      btnDiscover.textContent = 'Discovering...';
+      await invoke('discover_agents');
+      setTimeout(() => { btnDiscover.textContent = 'Discover'; }, 2000);
+    });
+
+    // ============== CHAT ==============
+    function updateChatUI() {
+      if (!selectedAgent) {
+        chatAgentName.textContent = 'Select an agent';
+        chatStatus.textContent = 'No active session';
+        chatStatus.className = 'chat-status';
+        chatInput.disabled = true;
+        btnSend.disabled = true;
+        chatEmpty.style.display = 'flex';
+        chatMessages.innerHTML = '';
+        chatMessages.appendChild(chatEmpty);
+        btnCancelSession.style.display = 'none';
+        return;
+      }
+
+      chatAgentName.textContent = selectedAgent;
+      chatInput.disabled = false;
+      btnSend.disabled = false;
+
+      if (activeSession) {
+        chatEmpty.style.display = 'none';
+        chatStatus.textContent = `Session: ${activeSession.status}`;
+        chatStatus.className = `chat-status ${activeSession.status}`;
+        btnCancelSession.style.display = activeSession.status === 'running' ? 'block' : 'none';
+        renderMessages(activeSession.messages);
+      } else {
+        chatEmpty.style.display = 'flex';
+        chatStatus.textContent = 'Ready to start';
+        chatStatus.className = 'chat-status';
+        btnCancelSession.style.display = 'none';
+        chatMessages.innerHTML = '';
+        chatMessages.appendChild(chatEmpty);
+      }
+    }
+
+    function renderMessages(messages) {
+      chatMessages.innerHTML = messages.map(msg => `
+        <div class="chat-message ${msg.is_user ? 'user' : 'agent'} ${msg.kind || ''}">
+          ${escapeHtml(msg.content)}
+          ${msg.pr_url ? `<a href="${msg.pr_url}" class="chat-pr-link" target="_blank">View PR</a>` : ''}
+          ${msg.cost_usd ? `<div class="chat-cost">Cost: $${msg.cost_usd.toFixed(4)}</div>` : ''}
+        </div>
+      `).join('');
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const text = chatInput.value.trim();
+      if (!text || !selectedAgent) return;
+      chatInput.value = '';
+
+      try {
+        if (!activeSession) {
+          const sessionId = await invoke('send_prompt', { agentName: selectedAgent, prompt: text });
+          activeSession = await invoke('get_active_chat_session');
+        } else {
+          await invoke('send_followup', { sessionId: activeSession.session_id, message: text });
+          activeSession = await invoke('get_active_chat_session');
+        }
+        updateChatUI();
+      } catch (e) {
+        console.error('Failed to send:', e);
+      }
+    }
+
+    btnSend.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+
+    btnCancelSession.addEventListener('click', async () => {
+      if (activeSession) {
+        await invoke('cancel_session', { sessionId: activeSession.session_id });
+      }
+    });
+
+    // ============== BADGES ==============
+    async function updateBadges() {
+      try {
+        const counts = await invoke('get_badge_counts');
+        permBadge.textContent = counts.permissions;
+        permBadge.style.display = counts.permissions > 0 ? 'block' : 'none';
+        agentBadge.textContent = counts.agents_busy;
+        agentBadge.style.display = counts.agents_busy > 0 ? 'block' : 'none';
+      } catch (e) {}
+    }
+
+    // ============== KEYBOARD ==============
+    document.addEventListener('keydown', async (e) => {
+      // View switching
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        if (e.key === '1') { e.preventDefault(); switchView('permissions'); return; }
+        if (e.key === '2') { e.preventDefault(); switchView('agents'); return; }
+        if (e.key === '3') { e.preventDefault(); switchView('chat'); return; }
+      }
+
+      // Permission shortcuts (only in permissions view with active permission)
+      if (currentView === 'permissions' && currentPermission) {
+        if (customMode) {
+          if (e.key === 'Enter') { e.preventDefault(); handlePermission('deny', customText.value.trim() || null); }
+          else if (e.key === 'Escape') { e.preventDefault(); resetCustomMode(); }
+          return;
+        }
+
+        if (e.key === 'Enter') { e.preventDefault(); handlePermission('allow'); }
+        else if (e.key === 'Escape') { e.preventDefault(); handlePermission('deny'); }
+        else if (e.key === 'Tab') {
+          e.preventDefault();
+          customMode = true;
+          customInputDiv.style.display = 'block';
+          customText.focus();
+          btnAllow.style.display = 'none';
+          btnDeny.textContent = 'Send (Enter)';
+        }
+      }
+
+      // Escape to hide overlay (when not in custom mode)
+      if (e.key === 'Escape' && !customMode && currentView !== 'permissions') {
+        await invoke('hide_window');
+        tabBar.classList.remove('visible');
+      }
+    });
+
+    // ============== EVENTS ==============
+    listen('permissions_updated', async () => {
+      if (!currentPermission) await refreshAndLoadNext();
+      updateBadges();
+    });
+
+    listen('permission_request', async () => {
+      if (!currentPermission) await refreshAndLoadNext();
+      tabBar.classList.add('visible');
+    });
+
+    listen('agent_discovered', async () => {
+      const list = await invoke('get_agents');
+      agents = {};
+      list.forEach(a => agents[a.name] = a);
+      renderAgents();
+      updateBadges();
+    });
+
+    listen('chat_message_received', async (event) => {
+      const msg = event.payload;
+      if (activeSession && msg.session_id === activeSession.session_id) {
+        activeSession = await invoke('get_active_chat_session');
+        updateChatUI();
+      }
+    });
+
+    listen('agent_event', async (event) => {
+      const e = event.payload;
+      if (e.agent && agents[e.agent]) {
+        agents[e.agent].status = ['completed', 'failed'].includes(e.kind) ? 'idle' : 'busy';
+        renderAgents();
+        updateBadges();
+      }
+    });
+
+    listen('toggle_overlay_shortcut', async () => {
+      const visible = await invoke('toggle_overlay');
+      if (visible) {
+        tabBar.classList.add('visible');
+        window.focus();
+      } else {
+        tabBar.classList.remove('visible');
+      }
+    });
+
+    listen('view_changed', (event) => {
+      switchView(event.payload, true); // fromEvent=true to prevent loop
+    });
+
+    // ============== INIT ==============
+    async function init() {
+      const agentsList = await invoke('get_agents');
+      agentsList.forEach(a => agents[a.name] = a);
+      renderAgents();
+
+      activeSession = await invoke('get_active_chat_session');
+      if (activeSession) {
+        selectedAgent = activeSession.agent;
+      }
+
+      updateChatUI();
+      updateBadges();
+      refreshAndLoadNext();
+    }
+
+    init();
+    console.log('Agent Management ready');
+  </script>
+</body>
+</html>

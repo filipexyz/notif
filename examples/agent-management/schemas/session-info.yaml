@@ -1,0 +1,19 @@
+name: SessionInfo
+version: 1.0.0
+description: Session information for the UI
+
+fields:
+  sessionId:
+    type: string
+    required: true
+    description: Claude Code session identifier
+
+  cwd:
+    type: string
+    description: Current working directory of the session
+
+  queueCount:
+    type: integer
+    required: true
+    minimum: 0
+    description: Number of pending permission requests in this session's queue

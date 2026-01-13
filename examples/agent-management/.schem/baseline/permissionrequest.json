@@ -1,0 +1,27 @@
+{
+  "name": "PermissionRequest",
+  "version": "1.0.0",
+  "description": "Permission request from Claude Code hook",
+  "fields": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for this request (from event ID)"
+    },
+    "toolName": {
+      "type": "string",
+      "description": "Name of the tool requesting permission (Edit, Write, Bash, Read, etc.)"
+    },
+    "toolInput": {
+      "type": "object",
+      "description": "Tool-specific input parameters"
+    },
+    "sessionId": {
+      "type": "string",
+      "description": "Claude Code session identifier"
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Current working directory of the Claude Code session"
+    }
+  }
+}

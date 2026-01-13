@@ -1,0 +1,70 @@
+{
+  "name": "AgentEvent",
+  "version": "1.0.0",
+  "description": "Event emitted by an agent (progress, completion, errors)",
+  "fields": {
+    "sessionId": {
+      "type": "string",
+      "required": true,
+      "description": "Session identifier"
+    },
+    "agent": {
+      "type": "string",
+      "required": true,
+      "description": "Agent name that emitted this event"
+    },
+    "kind": {
+      "type": "enum",
+      "required": true,
+      "values": [
+        "started",
+        "progress",
+        "output",
+        "completed",
+        "failed",
+        "blocked"
+      ],
+      "description": "Event type"
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable progress message"
+    },
+    "result": {
+      "type": "string",
+      "description": "Final result summary (for completed)"
+    },
+    "error": {
+      "type": "object",
+      "description": "Error details (for failed)",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        }
+      }
+    },
+    "pr": {
+      "type": "object",
+      "description": "PR info if created (for completed)",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer"
+        }
+      }
+    },
+    "costUsd": {
+      "type": "number",
+      "description": "Cost incurred so far"
+    },
+    "timestamp": {
+      "type": "datetime",
+      "required": true
+    }
+  }
+}

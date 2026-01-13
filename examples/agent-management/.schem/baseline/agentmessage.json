@@ -1,0 +1,48 @@
+{
+  "name": "AgentMessage",
+  "version": "1.0.0",
+  "description": "Message sent to control an agent (prompt, cancel, etc.)",
+  "fields": {
+    "sessionId": {
+      "type": "string",
+      "required": true,
+      "description": "Session identifier for tracking"
+    },
+    "agent": {
+      "type": "string",
+      "required": true,
+      "description": "Target agent name"
+    },
+    "kind": {
+      "type": "enum",
+      "required": true,
+      "values": [
+        "prompt",
+        "resume",
+        "cancel"
+      ],
+      "description": "Message type"
+    },
+    "prompt": {
+      "type": "string",
+      "description": "The prompt/instruction to send (for prompt/resume)"
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "budgetUsd": {
+          "type": "number",
+          "description": "Max spend for this session"
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "description": "Session timeout"
+        },
+        "autoPr": {
+          "type": "boolean",
+          "description": "Auto-create PR on completion"
+        }
+      }
+    }
+  }
+}

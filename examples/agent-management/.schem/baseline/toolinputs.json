@@ -1,0 +1,78 @@
+{
+  "name": "ToolInputs",
+  "version": "1.0.0",
+  "description": "Specific tool input types for permission requests",
+  "fields": {
+    "editInput": {
+      "type": "object",
+      "properties": {
+        "filePath": {
+          "type": "string",
+          "required": true,
+          "description": "Absolute path to the file being edited"
+        },
+        "oldString": {
+          "type": "string",
+          "required": true,
+          "description": "The text to be replaced"
+        },
+        "newString": {
+          "type": "string",
+          "required": true,
+          "description": "The replacement text"
+        }
+      }
+    },
+    "writeInput": {
+      "type": "object",
+      "properties": {
+        "filePath": {
+          "type": "string",
+          "required": true,
+          "description": "Absolute path to the file being written"
+        },
+        "content": {
+          "type": "string",
+          "required": true,
+          "description": "Content to write to the file"
+        }
+      }
+    },
+    "bashInput": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "required": true,
+          "description": "The bash command to execute"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of what the command does"
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Timeout in milliseconds"
+        }
+      }
+    },
+    "readInput": {
+      "type": "object",
+      "properties": {
+        "filePath": {
+          "type": "string",
+          "required": true,
+          "description": "Absolute path to the file being read"
+        },
+        "offset": {
+          "type": "integer",
+          "description": "Line number to start reading from"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Number of lines to read"
+        }
+      }
+    }
+  }
+}
