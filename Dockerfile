@@ -16,8 +16,9 @@ RUN go mod download
 # Copy source
 COPY . .
 
-# Build
+# Build server and CLI
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/notifd ./cmd/notifd
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/notif ./cmd/notif
 
 # Runtime stage
 FROM alpine:3.20
@@ -27,8 +28,12 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=builder /app/notifd /app/notifd
+COPY --from=builder /app/notif /app/notif
 COPY --from=builder /go/bin/goose /usr/local/bin/goose
 COPY db/migrations /app/migrations
+
+# Set CLI path for web terminal
+ENV CLI_BINARY_PATH=/app/notif
 
 # Entrypoint script
 COPY entrypoint.sh /app/entrypoint.sh
