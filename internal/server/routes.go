@@ -71,6 +71,14 @@ func (s *Server) routes() http.Handler {
 		r.Get("/ws", subscribeHandler.Subscribe)
 	})
 
+	// Terminal WebSocket endpoint (requires Clerk JWT, not API key)
+	terminalHandler := handler.NewTerminalHandler(s.terminalManager)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.UnifiedAuth(queries))
+		r.Use(middleware.RequireClerkAuth())
+		r.Get("/ws/terminal", terminalHandler.HandleWS)
+	})
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(middleware.UnifiedAuth(queries))
 

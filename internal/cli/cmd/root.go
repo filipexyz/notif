@@ -33,12 +33,22 @@ var rootCmd = &cobra.Command{
 			cfg = &config.Config{}
 		}
 
-		// Server URL priority: flag > config > default
-		if serverURL == "" && cfg.Server != "" {
-			serverURL = cfg.Server
+		// Auth token priority: NOTIF_JWT > NOTIF_API_KEY > config
+		if jwt := os.Getenv("NOTIF_JWT"); jwt != "" {
+			cfg.APIKey = jwt // JWT works as bearer token too
+		} else if apiKey := os.Getenv("NOTIF_API_KEY"); apiKey != "" {
+			cfg.APIKey = apiKey
 		}
+
+		// Server URL priority: flag > env > config > default
 		if serverURL == "" {
-			serverURL = client.DefaultServer
+			if envServer := os.Getenv("NOTIF_SERVER"); envServer != "" {
+				serverURL = envServer
+			} else if cfg.Server != "" {
+				serverURL = cfg.Server
+			} else {
+				serverURL = client.DefaultServer
+			}
 		}
 	},
 }

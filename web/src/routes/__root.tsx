@@ -55,9 +55,9 @@ function RootComponent() {
           </head>
           <body>
             <SignedIn>
-              <div className="min-h-screen flex flex-col">
+              <div className="h-screen flex flex-col overflow-hidden">
                 <TopNav />
-                <main className="flex-1">
+                <main className="flex-1 min-h-0">
                   <Outlet />
                 </main>
               </div>

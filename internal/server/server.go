@@ -10,6 +10,7 @@ import (
 	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/nats"
+	"github.com/filipexyz/notif/internal/terminal"
 	"github.com/filipexyz/notif/internal/webhook"
 	"github.com/filipexyz/notif/internal/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,12 +18,13 @@ import (
 
 // Server is the HTTP server.
 type Server struct {
-	cfg           *config.Config
-	db            *pgxpool.Pool
-	nats          *nats.Client
-	hub           *websocket.Hub
-	server        *http.Server
-	webhookCancel context.CancelFunc
+	cfg             *config.Config
+	db              *pgxpool.Pool
+	nats            *nats.Client
+	hub             *websocket.Hub
+	terminalManager *terminal.Manager
+	server          *http.Server
+	webhookCancel   context.CancelFunc
 }
 
 // New creates a new Server.
@@ -38,11 +40,16 @@ func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
 	hub := websocket.NewHub()
 	go hub.Run()
 
+	// Terminal manager for web terminal sessions
+	serverURL := "http://localhost:" + cfg.Port
+	termMgr := terminal.NewManager(cfg.CLIBinaryPath, serverURL)
+
 	s := &Server{
-		cfg:  cfg,
-		db:   pool,
-		nats: nc,
-		hub:  hub,
+		cfg:             cfg,
+		db:              pool,
+		nats:            nc,
+		hub:             hub,
+		terminalManager: termMgr,
 	}
 
 	s.server = &http.Server{

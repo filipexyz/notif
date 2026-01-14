@@ -26,6 +26,9 @@ type Config struct {
 
 	// CORS
 	CORSOrigins []string `env:"CORS_ORIGINS" envSeparator:"," envDefault:"http://localhost:3000,http://localhost:5173"`
+
+	// Terminal
+	CLIBinaryPath string `env:"CLI_BINARY_PATH" envDefault:"notif"`
 }
 
 func Load() (*Config, error) {

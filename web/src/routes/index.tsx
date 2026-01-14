@@ -1,309 +1,57 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Send, Zap, Webhook, AlertTriangle, Key } from 'lucide-react'
-import { EventRow } from '../components/events/EventRow'
-import { EventDetail } from '../components/events/EventDetail'
-import { LiveIndicator } from '../components/events/LiveIndicator'
-import { SlideOver } from '../components/layout/SlideOver'
-import { Button } from '../components/ui'
-import { useApi } from '../lib/api'
-import { useEventStream } from '../lib/websocket'
-import type { StoredEvent } from '../lib/types'
+import { useState } from 'react'
+import { Terminal, Maximize2, Minimize2 } from 'lucide-react'
+import { WebTerminal } from '../components/terminal/WebTerminal'
 
-type StatsOverview = {
-  events: { total: number }
-  webhooks: { total: number; enabled: number; success_rate_24h: number }
-  dlq: { pending: number }
-  api_keys: { total: number; active_24h: number }
-}
-
-// UI event format used in components
-export type UIEvent = {
-  id: string
-  topic: string
-  data: Record<string, unknown>
-  timestamp: Date
-}
-
-function toUIEvent(stored: StoredEvent): UIEvent {
-  return {
-    id: stored.event.id,
-    topic: stored.event.topic,
-    data: stored.event.data || {},
-    timestamp: new Date(stored.event.timestamp),
-  }
-}
+type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 export const Route = createFileRoute('/')({
-  component: EventsPage,
+  component: TerminalPage,
 })
 
-function EventsPage() {
-  const [selectedEvent, setSelectedEvent] = useState<UIEvent | null>(null)
-  const [liveEvents, setLiveEvents] = useState<UIEvent[]>([])
-  const [showEmitModal, setShowEmitModal] = useState(false)
-  const [emitTopic, setEmitTopic] = useState('test.event')
-  const [emitData, setEmitData] = useState('{\n  "message": "Hello world"\n}')
-  const api = useApi()
-  const queryClient = useQueryClient()
+function TerminalPage() {
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected')
 
-  const emitMutation = useMutation({
-    mutationFn: (payload: { topic: string; data: unknown }) =>
-      api<{ id: string }>('/api/v1/emit', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }),
-    onSuccess: () => {
-      setShowEmitModal(false)
-      queryClient.invalidateQueries({ queryKey: ['events'] })
-    },
-  })
-
-  const handleEmit = () => {
-    try {
-      const data = JSON.parse(emitData)
-      emitMutation.mutate({ topic: emitTopic, data })
-    } catch {
-      alert('Invalid JSON')
-    }
+  const stateColors: Record<ConnectionState, string> = {
+    connected: 'bg-success/10 text-success',
+    connecting: 'bg-warning/10 text-warning',
+    disconnected: 'bg-neutral-100 text-neutral-500',
+    error: 'bg-error/10 text-error',
   }
-
-  const { data: stats } = useQuery({
-    queryKey: ['stats'],
-    queryFn: () => api<StatsOverview>('/api/v1/stats/overview'),
-    refetchInterval: 30000, // Refresh every 30s
-  })
-
-  const { data: eventsResponse, isLoading, error } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => api<{ events: StoredEvent[]; count: number }>('/api/v1/events'),
-  })
-  const events = eventsResponse?.events
-
-  // Handle incoming WebSocket events
-  const handleNewEvent = useCallback((event: StoredEvent) => {
-    const uiEvent = toUIEvent(event)
-    setLiveEvents(prev => {
-      // Avoid duplicates
-      if (prev.some(e => e.id === uiEvent.id)) return prev
-      // Keep most recent 100 events
-      return [uiEvent, ...prev].slice(0, 100)
-    })
-    // Also invalidate the query to refresh the full list
-    queryClient.invalidateQueries({ queryKey: ['events'] })
-  }, [queryClient])
-
-  const { isConnected, connect, disconnect } = useEventStream(handleNewEvent)
-
-  // Toggle live mode
-  const toggleLive = () => {
-    if (isConnected) {
-      disconnect()
-    } else {
-      connect()
-    }
-  }
-
-  // Auto-connect on mount
-  useEffect(() => {
-    connect()
-    return () => disconnect()
-  }, [connect, disconnect])
-
-  // Merge live events with fetched events
-  const fetchedEvents = events?.map(toUIEvent) ?? []
-  const allEvents = [...liveEvents, ...fetchedEvents]
-    .filter((event, index, self) =>
-      index === self.findIndex(e => e.id === event.id)
-    )
-    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
 
   return (
-    <div className="h-full">
-      {/* Stats cards */}
-      <div className="p-4 grid grid-cols-4 gap-4 border-b border-neutral-200 bg-neutral-50">
-        <div className="bg-white border border-neutral-200 p-4">
-          <div className="flex items-center gap-2 text-neutral-500 mb-1">
-            <Zap className="w-4 h-4" />
-            <span className="text-xs font-medium uppercase">Events</span>
-          </div>
-          <div className="text-2xl font-semibold text-neutral-900">
-            {stats?.events.total.toLocaleString() ?? '—'}
-          </div>
-        </div>
-
-        <div className="bg-white border border-neutral-200 p-4">
-          <div className="flex items-center gap-2 text-neutral-500 mb-1">
-            <Webhook className="w-4 h-4" />
-            <span className="text-xs font-medium uppercase">Webhooks</span>
-          </div>
-          <div className="text-2xl font-semibold text-neutral-900">
-            {stats?.webhooks.enabled ?? '—'}
-            <span className="text-sm font-normal text-neutral-500 ml-1">
-              / {stats?.webhooks.total ?? 0}
-            </span>
-          </div>
-          {stats?.webhooks.success_rate_24h !== undefined && (
-            <div className="text-xs text-neutral-500 mt-1">
-              {(stats.webhooks.success_rate_24h * 100).toFixed(0)}% success rate
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white border border-neutral-200 p-4">
-          <div className="flex items-center gap-2 text-neutral-500 mb-1">
-            <AlertTriangle className="w-4 h-4" />
-            <span className="text-xs font-medium uppercase">DLQ</span>
-          </div>
-          <div className={`text-2xl font-semibold ${stats?.dlq.pending ? 'text-error' : 'text-neutral-900'}`}>
-            {stats?.dlq.pending ?? '—'}
-          </div>
-        </div>
-
-        <div className="bg-white border border-neutral-200 p-4">
-          <div className="flex items-center gap-2 text-neutral-500 mb-1">
-            <Key className="w-4 h-4" />
-            <span className="text-xs font-medium uppercase">API Keys</span>
-          </div>
-          <div className="text-2xl font-semibold text-neutral-900">
-            {stats?.api_keys.total ?? '—'}
-          </div>
-          {stats?.api_keys.active_24h !== undefined && (
-            <div className="text-xs text-neutral-500 mt-1">
-              {stats.api_keys.active_24h} active today
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Filter bar */}
-      <div className="h-10 px-4 flex items-center justify-between border-b border-neutral-200 bg-white">
+    <div className={`h-full flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}>
+      {/* Toolbar */}
+      <div className="h-10 px-4 flex items-center justify-between border-b border-neutral-200 bg-white shrink-0">
         <div className="flex items-center gap-2">
-          <select className="px-2 py-1 text-sm border border-neutral-200 bg-white text-neutral-700">
-            <option>All topics</option>
-            <option>orders.*</option>
-            <option>users.*</option>
-            <option>payments.*</option>
-          </select>
-          <select className="px-2 py-1 text-sm border border-neutral-200 bg-white text-neutral-700">
-            <option>Last hour</option>
-            <option>Last 24 hours</option>
-            <option>Last 7 days</option>
-          </select>
+          <Terminal className="w-4 h-4 text-neutral-500" />
+          <span className="text-sm font-medium text-neutral-700">Terminal</span>
+          <span className={`text-xs px-2 py-0.5 ${stateColors[connectionState]}`}>
+            {connectionState}
+          </span>
         </div>
-        <div className="flex items-center gap-3">
-          <Button size="sm" onClick={() => setShowEmitModal(true)}>
-            <Send className="w-3.5 h-3.5 mr-1.5" />
-            Send Event
-          </Button>
-          <LiveIndicator connected={isConnected} onClick={toggleLive} />
-        </div>
-      </div>
-
-      {/* Loading state */}
-      {isLoading && (
-        <div className="p-8 text-center text-neutral-500">Loading events...</div>
-      )}
-
-      {/* Error state */}
-      {error && (
-        <div className="p-8 text-center text-error">
-          Failed to load events: {error.message}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!isLoading && !error && allEvents.length === 0 && (
-        <div className="p-8 text-center text-neutral-500">
-          No events yet. Publish your first event to get started.
-        </div>
-      )}
-
-      {/* Event stream */}
-      <div className="divide-y divide-neutral-100">
-        {allEvents.map((event) => (
-          <EventRow
-            key={event.id}
-            event={event}
-            selected={selectedEvent?.id === event.id}
-            onClick={() => setSelectedEvent(event)}
-          />
-        ))}
-      </div>
-
-      {/* Load more */}
-      {allEvents.length > 0 && (
-        <div className="p-4 text-center">
-          <button className="text-sm text-neutral-500 hover:text-neutral-700">
-            ↑ Load more
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="p-1.5 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100"
+          >
+            {isFullscreen ? (
+              <Minimize2 className="w-4 h-4" />
+            ) : (
+              <Maximize2 className="w-4 h-4" />
+            )}
           </button>
         </div>
-      )}
+      </div>
 
-      {/* Detail slide-over */}
-      <SlideOver
-        open={!!selectedEvent}
-        onClose={() => setSelectedEvent(null)}
-        title={selectedEvent?.topic}
-      >
-        {selectedEvent && <EventDetail event={selectedEvent} />}
-      </SlideOver>
-
-      {/* Emit modal */}
-      {showEmitModal && (
-        <>
-          <div
-            className="fixed inset-0 bg-neutral-900/20 z-40"
-            onClick={() => setShowEmitModal(false)}
-          />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white border border-neutral-200 p-6 z-50">
-            <h3 className="text-lg font-medium text-neutral-900 mb-4">Send Event</h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
-                  Topic
-                </label>
-                <input
-                  type="text"
-                  value={emitTopic}
-                  onChange={(e) => setEmitTopic(e.target.value)}
-                  placeholder="orders.created"
-                  className="w-full px-3 py-2 text-sm border border-neutral-200 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
-                  Data (JSON)
-                </label>
-                <textarea
-                  value={emitData}
-                  onChange={(e) => setEmitData(e.target.value)}
-                  rows={6}
-                  className="w-full px-3 py-2 text-sm border border-neutral-200 font-mono"
-                />
-              </div>
-
-              {emitMutation.error && (
-                <div className="text-sm text-error">
-                  {emitMutation.error.message}
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-2">
-                <Button onClick={handleEmit} disabled={emitMutation.isPending}>
-                  {emitMutation.isPending ? 'Sending...' : 'Send'}
-                </Button>
-                <Button variant="secondary" onClick={() => setShowEmitModal(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      {/* Terminal */}
+      <div className="flex-1 min-h-0">
+        <WebTerminal
+          className="h-full"
+          onConnectionChange={setConnectionState}
+        />
+      </div>
     </div>
   )
 }
