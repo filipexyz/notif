@@ -130,3 +130,61 @@ NATS_URL=nats://localhost:4222
 CLERK_SECRET_KEY=sk_...
 PORT=8080
 ```
+
+## Anonymous Mode (Frontend)
+
+Bypass Clerk auth for local frontend development. Set in `web/.env`:
+
+```bash
+VITE_ANONYMOUS_MODE=true
+VITE_DEV_API_KEY=nsh_testkey1234567890abcdefghijk
+```
+
+This allows testing the dashboard without signing in. Shows "Anonymous Mode" badge.
+
+## Browser Testing with agent-browser
+
+Use `agent-browser` CLI for frontend automation and testing.
+
+### Quick Reference
+
+```bash
+# Open page and get element refs
+agent-browser open http://localhost:3000 --session test
+agent-browser snapshot -i --session test    # Interactive elements with refs
+
+# Interact with elements (use @ref from snapshot)
+agent-browser click @e1 --session test
+agent-browser fill @e2 "text" --session test
+agent-browser type @e2 "text" --session test  # Doesn't clear first
+
+# Get information
+agent-browser get url --session test
+agent-browser get title --session test
+agent-browser get text @e1 --session test
+
+# Screenshots
+agent-browser screenshot /tmp/screen.png --session test
+agent-browser screenshot /tmp/full.png --full --session test
+
+# Run JavaScript
+agent-browser eval "document.title" --session test
+
+# Close browser
+agent-browser close --session test
+```
+
+### Typical Testing Flow
+
+1. Open page: `agent-browser open <url> --session <name>`
+2. Take snapshot: `agent-browser snapshot -i --session <name>`
+3. Interact using refs: `agent-browser click @e1 --session <name>`
+4. Verify with screenshot: `agent-browser screenshot /tmp/test.png --session <name>`
+5. Close: `agent-browser close --session <name>`
+
+### Useful Options
+
+- `--session <name>`: Isolated browser session (required for parallel testing)
+- `--headed`: Show browser window (not headless)
+- `-i, --interactive`: Only show interactive elements in snapshot
+- `-f, --full`: Full page screenshot

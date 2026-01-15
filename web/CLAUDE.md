@@ -38,6 +38,7 @@ src/
 │   ├── __root.tsx    # Root layout with TopNav
 │   ├── index.tsx     # Events page (home)
 │   ├── webhooks/     # Webhook CRUD
+│   ├── schedules/    # Scheduled events
 │   ├── dlq.tsx       # Dead letter queue
 │   └── settings.tsx  # API keys, settings
 ├── components/
@@ -56,6 +57,8 @@ src/
 | `/webhooks` | Webhook list |
 | `/webhooks/new` | Create webhook |
 | `/webhooks/:id` | Edit webhook |
+| `/schedules` | Scheduled events list |
+| `/schedules/:id` | Schedule details |
 | `/dlq` | Dead letter queue |
 | `/settings` | API keys management |
 

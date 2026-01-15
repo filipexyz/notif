@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useAuth } from '@clerk/tanstack-react-start'
-import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-import { WebLinksAddon } from '@xterm/addon-web-links'
+import type { Terminal as TerminalType } from '@xterm/xterm'
+import type { FitAddon as FitAddonType } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
 const WS_BASE = import.meta.env.VITE_API_URL?.replace('http', 'ws') || 'ws://localhost:8080'
@@ -27,8 +26,8 @@ interface WebTerminalProps {
 
 export function WebTerminal({ className, onConnectionChange }: WebTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const termRef = useRef<Terminal | null>(null)
-  const fitAddonRef = useRef<FitAddon | null>(null)
+  const termRef = useRef<TerminalType | null>(null)
+  const fitAddonRef = useRef<FitAddonType | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const { getToken } = useAuth()
   const [state, setState] = useState<ConnectionState>('disconnected')
@@ -128,64 +127,86 @@ export function WebTerminal({ className, onConnectionChange }: WebTerminalProps)
   useEffect(() => {
     if (!containerRef.current) return
 
-    const term = new Terminal({
-      cursorBlink: true,
-      fontFamily: 'JetBrains Mono, monospace',
-      fontSize: 14,
-      lineHeight: 1.2,
-      theme: {
-        background: '#fafafa',
-        foreground: '#171717',
-        cursor: '#a855f7',
-        cursorAccent: '#fafafa',
-        selectionBackground: '#a855f740',
-        black: '#171717',
-        red: '#ef4444',
-        green: '#22c55e',
-        yellow: '#f59e0b',
-        blue: '#3b82f6',
-        magenta: '#a855f7',
-        cyan: '#06b6d4',
-        white: '#e5e5e5',
-        brightBlack: '#737373',
-        brightRed: '#f87171',
-        brightGreen: '#4ade80',
-        brightYellow: '#fbbf24',
-        brightBlue: '#60a5fa',
-        brightMagenta: '#c084fc',
-        brightCyan: '#22d3ee',
-        brightWhite: '#fafafa',
-      },
-    })
+    // Dynamic import for SSR compatibility (xterm requires DOM)
+    let mounted = true
+    let cleanupFn: (() => void) | undefined
 
-    const fitAddon = new FitAddon()
-    const webLinksAddon = new WebLinksAddon()
+    const initTerminal = async () => {
+      const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
+        import('@xterm/xterm'),
+        import('@xterm/addon-fit'),
+        import('@xterm/addon-web-links'),
+      ])
 
-    term.loadAddon(fitAddon)
-    term.loadAddon(webLinksAddon)
-    term.open(containerRef.current)
-    fitAddon.fit()
+      if (!mounted || !containerRef.current) return
 
-    termRef.current = term
-    fitAddonRef.current = fitAddon
+      const term = new Terminal({
+        cursorBlink: true,
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: 14,
+        lineHeight: 1.2,
+        theme: {
+          background: '#fafafa',
+          foreground: '#171717',
+          cursor: '#a855f7',
+          cursorAccent: '#fafafa',
+          selectionBackground: '#a855f740',
+          black: '#171717',
+          red: '#ef4444',
+          green: '#22c55e',
+          yellow: '#f59e0b',
+          blue: '#3b82f6',
+          magenta: '#a855f7',
+          cyan: '#06b6d4',
+          white: '#e5e5e5',
+          brightBlack: '#737373',
+          brightRed: '#f87171',
+          brightGreen: '#4ade80',
+          brightYellow: '#fbbf24',
+          brightBlue: '#60a5fa',
+          brightMagenta: '#c084fc',
+          brightCyan: '#22d3ee',
+          brightWhite: '#fafafa',
+        },
+      })
 
-    // Focus terminal
-    term.focus()
+      const fitAddon = new FitAddon()
+      const webLinksAddon = new WebLinksAddon()
 
-    // Handle window resize
-    const handleResize = () => {
+      term.loadAddon(fitAddon)
+      term.loadAddon(webLinksAddon)
+      term.open(containerRef.current)
       fitAddon.fit()
-      sendResize()
-    }
-    window.addEventListener('resize', handleResize)
 
-    // Connect on mount
-    connect()
+      termRef.current = term
+      fitAddonRef.current = fitAddon
+
+      // Focus terminal
+      term.focus()
+
+      // Handle window resize
+      const handleResize = () => {
+        fitAddon.fit()
+        sendResize()
+      }
+      window.addEventListener('resize', handleResize)
+
+      // Connect on mount
+      connect()
+
+      // Store cleanup function
+      cleanupFn = () => {
+        window.removeEventListener('resize', handleResize)
+      }
+    }
+
+    initTerminal()
 
     return () => {
-      window.removeEventListener('resize', handleResize)
+      mounted = false
+      cleanupFn?.()
       wsRef.current?.close()
-      term.dispose()
+      termRef.current?.dispose()
     }
   }, [connect, sendResize])
 

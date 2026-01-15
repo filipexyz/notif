@@ -5,6 +5,7 @@ import { Badge } from "../ui/Badge";
 const navItems = [
   { href: "/", label: "Events" },
   { href: "/webhooks", label: "Webhooks" },
+  { href: "/schedules", label: "Schedules" },
   { href: "/dlq", label: "DLQ" },
   { href: "/settings", label: "Settings" },
 ];

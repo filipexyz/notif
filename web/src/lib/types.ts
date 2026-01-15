@@ -101,3 +101,25 @@ export type EventDelivery = {
   acked_at?: string
   error?: string
 }
+
+// Schedule
+export type Schedule = {
+  id: string
+  topic: string
+  data: Record<string, unknown>
+  scheduled_for: string
+  status: 'pending' | 'completed' | 'cancelled' | 'failed'
+  error?: string
+  created_at: string
+  executed_at?: string
+}
+
+export type SchedulesResponse = {
+  schedules: Schedule[]
+  total: number
+}
+
+export type RunScheduleResponse = {
+  schedule_id: string
+  event_id: string
+}
