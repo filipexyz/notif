@@ -52,6 +52,19 @@ type EventDelivery struct {
 	Error        pgtype.Text        `json:"error"`
 }
 
+type ScheduledEvent struct {
+	ID           string             `json:"id"`
+	OrgID        string             `json:"org_id"`
+	Topic        string             `json:"topic"`
+	Data         []byte             `json:"data"`
+	ScheduledFor pgtype.Timestamptz `json:"scheduled_for"`
+	Status       string             `json:"status"`
+	ApiKeyID     pgtype.UUID        `json:"api_key_id"`
+	Error        pgtype.Text        `json:"error"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ExecutedAt   pgtype.Timestamptz `json:"executed_at"`
+}
+
 type Webhook struct {
 	ID        pgtype.UUID        `json:"id"`
 	ApiKeyID  pgtype.UUID        `json:"api_key_id"`

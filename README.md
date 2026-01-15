@@ -78,7 +78,44 @@ notif emit 'tasks.create' '{"task_id": "abc", "action": "process"}' \
 
 This subscribes to reply topics, emits the event, and waits for a matching response.
 
-### 5. Subscribe to Events
+### 5. Schedule Events
+
+Schedule events to be emitted at a future time:
+
+**CLI**
+```bash
+# Schedule for specific time
+notif emit orders.reminder '{"order_id": "123"}' --at "2024-01-15T10:00:00Z"
+
+# Schedule with relative delay
+notif emit orders.reminder '{"order_id": "123"}' --in 30m
+
+# List pending schedules
+notif schedules list
+
+# Cancel a pending schedule
+notif schedules cancel sch_abc123
+
+# Execute immediately (skip waiting)
+notif schedules run sch_def456
+```
+
+**REST API**
+```bash
+# Schedule for specific time
+curl -X POST https://api.notif.sh/api/v1/schedules \
+  -H "Authorization: Bearer $NOTIF_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"topic": "orders.reminder", "data": {"order_id": "123"}, "scheduled_for": "2024-01-15T10:00:00Z"}'
+
+# Schedule with relative delay
+curl -X POST https://api.notif.sh/api/v1/schedules \
+  -H "Authorization: Bearer $NOTIF_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"topic": "orders.reminder", "data": {"order_id": "123"}, "in": "30m"}'
+```
+
+### 6. Subscribe to Events
 
 **CLI**
 ```bash
@@ -117,6 +154,7 @@ while let Some(event) = stream.next().await {
 | **Publish** | Simple HTTP POST or SDK |
 | **Subscribe** | Real-time WebSocket with ack/nack |
 | **Webhooks** | HTTP delivery with HMAC signing |
+| **Scheduled Events** | Emit events at a future time (`--at`, `--in`) |
 | **Auto-retry** | Exponential backoff with max retries |
 | **Dead Letter Queue** | Failed events preserved for replay |
 | **Consumer Groups** | Load-balance across instances |

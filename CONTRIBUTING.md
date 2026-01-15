@@ -5,21 +5,21 @@ This guide covers self-hosting and development setup for notif.sh.
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         notif.sh                            │
-│                                                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ REST API │  │WebSocket │  │ Webhooks │  │Dashboard │   │
-│  │  /emit   │  │   /ws    │  │  Worker  │  │  (React) │   │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────────┘   │
-│       │             │             │                        │
-│       └─────────────┼─────────────┘                        │
-│                     ▼                                       │
-│              ┌─────────────┐      ┌─────────────┐          │
-│              │    NATS     │      │  PostgreSQL │          │
-│              │ (JetStream) │      │ (metadata)  │          │
-│              └─────────────┘      └─────────────┘          │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                              notif.sh                                    │
+│                                                                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────┐ │
+│  │ REST API │  │WebSocket │  │ Webhooks │  │ Scheduler │  │Dashboard │ │
+│  │  /emit   │  │   /ws    │  │  Worker  │  │  Worker   │  │  (React) │ │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └─────┬─────┘  └──────────┘ │
+│       │             │             │              │                      │
+│       └─────────────┼─────────────┴──────────────┘                      │
+│                     ▼                                                    │
+│              ┌─────────────┐      ┌─────────────┐                       │
+│              │    NATS     │      │  PostgreSQL │                       │
+│              │ (JetStream) │      │ (metadata)  │                       │
+│              └─────────────┘      └─────────────┘                       │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Tech Stack
@@ -63,7 +63,7 @@ Server runs at `http://localhost:8080`.
 make seed
 ```
 
-This creates a test key: `nsh_test_abcdefghij12345678901234`
+This creates a test key: `nsh_testkey1234567890abcdefghijk`
 
 Or manually:
 
@@ -82,7 +82,7 @@ VALUES (
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/emit \
-  -H "Authorization: Bearer nsh_test_abcdefghij12345678901234" \
+  -H "Authorization: Bearer nsh_testkey1234567890abcdefghijk" \
   -H "Content-Type: application/json" \
   -d '{"topic": "test", "data": {"hello": "world"}}'
 ```
@@ -95,8 +95,9 @@ make run          # Run server
 make watch        # Run with hot reload (requires air)
 make build        # Build server binary
 make build-cli    # Build CLI binary
-make test         # Run all tests (Go + TypeScript + Python)
-make test-e2e     # Run e2e tests
+make test         # Run unit tests (Go + TypeScript + Python)
+make test-e2e     # Run e2e tests (Docker)
+make test-integration  # Run integration tests (requires running server)
 make migrate      # Run database migrations
 make generate     # Generate sqlc code
 make seed         # Create test API key
@@ -126,6 +127,7 @@ notif/
 │   ├── nats/             # NATS JetStream
 │   ├── websocket/        # WebSocket hub
 │   ├── webhook/          # Webhook delivery
+│   ├── scheduler/        # Scheduled events worker
 │   ├── db/               # sqlc generated code
 │   └── domain/           # Business logic
 ├── db/
@@ -163,6 +165,11 @@ notif/
 | GET | `/api/v1/webhooks` | List webhooks |
 | GET | `/api/v1/dlq` | List dead letter queue |
 | POST | `/api/v1/dlq/:seq/replay` | Replay DLQ message |
+| POST | `/api/v1/schedules` | Create scheduled event |
+| GET | `/api/v1/schedules` | List scheduled events |
+| GET | `/api/v1/schedules/:id` | Get scheduled event |
+| DELETE | `/api/v1/schedules/:id` | Cancel scheduled event |
+| POST | `/api/v1/schedules/:id/run` | Execute immediately |
 
 ## WebSocket Protocol
 

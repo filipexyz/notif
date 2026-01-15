@@ -1,11 +1,11 @@
 -- Seed API keys for development
 -- Run this after migrations: psql $DATABASE_URL -f scripts/seed.sql
 
--- Test key: nsh_test_abcdefghij12345678901234
+-- Test key: nsh_testkey1234567890abcdefghijk (32 chars: nsh_ + 28 alphanumeric)
 INSERT INTO api_keys (key_hash, key_prefix, name, org_id)
 VALUES (
-    '96634cc1642dc070e95218752fabbf5bbf8410262de19ddbf9e3f1fa7e1e79b9',
-    'nsh_test_abcdef',
+    '49fa6482e6112e24939cd4c42aab7b904c7e33da2ddc6e8dcf60686055859b1e',
+    'nsh_testkey12345',
     'Dev Test Key',
     'org_dev_test'
 ) ON CONFLICT (key_hash) DO NOTHING;

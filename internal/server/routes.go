@@ -64,6 +64,7 @@ func (s *Server) routes() http.Handler {
 	webhookHandler := handler.NewWebhookHandler(queries)
 	apiKeyHandler := handler.NewAPIKeyHandler(queries)
 	statsHandler := handler.NewStatsHandler(queries, eventReader, dlqReader)
+	schedulesHandler := handler.NewSchedulesHandler(queries, s.schedulerWorker)
 
 	// WebSocket endpoint at root (no /api/v1 prefix for WS)
 	r.Group(func(r chi.Router) {
@@ -105,11 +106,19 @@ func (s *Server) routes() http.Handler {
 		r.Post("/dlq/replay-all", dlqHandler.ReplayAll)
 		r.Delete("/dlq/purge", dlqHandler.Purge)
 
+		// Schedules
+		r.Post("/schedules", schedulesHandler.Create)
+		r.Get("/schedules", schedulesHandler.List)
+		r.Get("/schedules/{id}", schedulesHandler.Get)
+		r.Delete("/schedules/{id}", schedulesHandler.Cancel)
+		r.Post("/schedules/{id}/run", schedulesHandler.Run)
+
 		// Stats (observability)
 		r.Get("/stats/overview", statsHandler.Overview)
 		r.Get("/stats/events", statsHandler.Events)
 		r.Get("/stats/webhooks", statsHandler.Webhooks)
 		r.Get("/stats/dlq", statsHandler.DLQ)
+		r.Get("/stats/schedules", schedulesHandler.Stats)
 
 		// API Keys (requires Clerk auth, not API key)
 		r.Group(func(r chi.Router) {

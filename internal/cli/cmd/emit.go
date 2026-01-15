@@ -18,10 +18,12 @@ import (
 // Note: matchesJqFilter and compileJqFilter are in jq.go
 
 var (
-	replyTo      string
-	replyFilter  string
-	replyTimeout time.Duration
-	rawOutput    bool
+	replyTo        string
+	replyFilter    string
+	replyTimeout   time.Duration
+	rawOutput      bool
+	scheduleAt     string
+	scheduleIn     string
 )
 
 var emitCmd = &cobra.Command{
@@ -33,6 +35,10 @@ Examples:
   notif emit orders.created '{"id": 123}'
   echo '{"id": 123}' | notif emit orders.created
   cat event.json | notif emit orders.created
+
+Schedule for later:
+  notif emit orders.reminder '{"id": 123}' --at "2024-01-15T10:00:00Z"
+  notif emit orders.reminder '{"id": 123}' --in 30m
 
 Request-response mode (wait for reply):
   notif emit orders.create '{"id": 123}' \
@@ -79,6 +85,40 @@ The $input variable in --filter references the emitted request data.`,
 		}
 
 		c := getClient()
+
+		// Schedule mode
+		if scheduleAt != "" || scheduleIn != "" {
+			var scheduledFor *time.Time
+			if scheduleAt != "" {
+				t, err := time.Parse(time.RFC3339, scheduleAt)
+				if err != nil {
+					out.Error("Invalid --at time format. Use RFC3339 format, e.g., 2024-01-15T10:00:00Z")
+					return
+				}
+				scheduledFor = &t
+			}
+
+			resp, err := c.Schedule(topic, json.RawMessage(data), scheduledFor, scheduleIn)
+			if err != nil {
+				if jsonOutput {
+					out.JSON(map[string]any{"error": err.Error()})
+				} else {
+					out.Error("Failed to schedule: %v", err)
+				}
+				return
+			}
+
+			if jsonOutput {
+				out.JSON(resp)
+				return
+			}
+
+			out.Success("Event scheduled")
+			out.KeyValue("ID", resp.ID)
+			out.KeyValue("Topic", resp.Topic)
+			out.KeyValue("Scheduled For", resp.ScheduledFor.Format("2006-01-02 15:04:05 MST"))
+			return
+		}
 
 		// Request-response mode
 		if replyTo != "" {
@@ -204,5 +244,7 @@ func init() {
 	emitCmd.Flags().StringVar(&replyFilter, "filter", "", "jq expression to match response")
 	emitCmd.Flags().DurationVar(&replyTimeout, "timeout", 30*time.Second, "timeout waiting for response")
 	emitCmd.Flags().BoolVar(&rawOutput, "raw", false, "output only the data field (for hooks/pipes)")
+	emitCmd.Flags().StringVar(&scheduleAt, "at", "", "schedule for specific time (RFC3339, e.g., 2024-01-15T10:00:00Z)")
+	emitCmd.Flags().StringVar(&scheduleIn, "in", "", "schedule after delay (e.g., 5m, 1h, 30s)")
 	rootCmd.AddCommand(emitCmd)
 }

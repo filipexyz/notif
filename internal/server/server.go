@@ -5,11 +5,13 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/nats"
+	"github.com/filipexyz/notif/internal/scheduler"
 	"github.com/filipexyz/notif/internal/terminal"
 	"github.com/filipexyz/notif/internal/webhook"
 	"github.com/filipexyz/notif/internal/websocket"
@@ -18,13 +20,15 @@ import (
 
 // Server is the HTTP server.
 type Server struct {
-	cfg             *config.Config
-	db              *pgxpool.Pool
-	nats            *nats.Client
-	hub             *websocket.Hub
-	terminalManager *terminal.Manager
-	server          *http.Server
-	webhookCancel   context.CancelFunc
+	cfg              *config.Config
+	db               *pgxpool.Pool
+	nats             *nats.Client
+	hub              *websocket.Hub
+	terminalManager  *terminal.Manager
+	schedulerWorker  *scheduler.Worker
+	server           *http.Server
+	webhookCancel    context.CancelFunc
+	schedulerCancel  context.CancelFunc
 }
 
 // New creates a new Server.
@@ -44,12 +48,18 @@ func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
 	serverURL := "http://localhost:" + cfg.Port
 	termMgr := terminal.NewManager(cfg.CLIBinaryPath, serverURL)
 
+	// Initialize scheduler worker
+	queries := db.New(pool)
+	publisher := nats.NewPublisher(nc.JetStream())
+	schedWorker := scheduler.NewWorker(queries, publisher, 10*time.Second)
+
 	s := &Server{
-		cfg:             cfg,
-		db:              pool,
-		nats:            nc,
-		hub:             hub,
-		terminalManager: termMgr,
+		cfg:              cfg,
+		db:               pool,
+		nats:             nc,
+		hub:              hub,
+		terminalManager:  termMgr,
+		schedulerWorker:  schedWorker,
 	}
 
 	s.server = &http.Server{
@@ -71,7 +81,6 @@ func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
 	webhookCtx, webhookCancel := context.WithCancel(context.Background())
 	s.webhookCancel = webhookCancel
 
-	queries := db.New(s.db)
 	dlqPublisher := nats.NewDLQPublisher(nc.JetStream())
 	worker := webhook.NewWorker(queries, nc.Stream(), nc.JetStream(), dlqPublisher)
 	go func() {
@@ -79,6 +88,11 @@ func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
 			slog.Error("webhook worker error", "error", err)
 		}
 	}()
+
+	// Start scheduler worker
+	schedulerCtx, schedulerCancel := context.WithCancel(context.Background())
+	s.schedulerCancel = schedulerCancel
+	go schedWorker.Start(schedulerCtx)
 
 	return s
 }
@@ -95,9 +109,12 @@ func (s *Server) Serve(l net.Listener) error {
 
 // Shutdown gracefully shuts down the server.
 func (s *Server) Shutdown(ctx context.Context) error {
-	// Stop webhook worker first
+	// Stop workers first
 	if s.webhookCancel != nil {
 		s.webhookCancel()
+	}
+	if s.schedulerCancel != nil {
+		s.schedulerCancel()
 	}
 	return s.server.Shutdown(ctx)
 }

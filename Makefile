@@ -105,7 +105,7 @@ watch:
 
 # Show test key for curl commands
 key:
-	@echo "Test API Key: nsh_test_abcdefghij12345678901234"
+	@echo "Test API Key: nsh_testkey1234567890abcdefghijk"
 
 # Publish TypeScript SDK to npm
 publish-ts:

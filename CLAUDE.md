@@ -21,6 +21,7 @@ Managed pub/sub event hub with webhooks, DLQ, and real-time subscriptions.
 │   ├── middleware/     # Auth (unified, clerk)
 │   ├── nats/           # NATS JetStream (publisher, consumer, DLQ)
 │   ├── websocket/      # WebSocket hub
+│   ├── scheduler/      # Scheduled events worker
 │   ├── db/             # sqlc generated code
 │   └── domain/         # Business logic
 ├── db/
@@ -30,7 +31,9 @@ Managed pub/sub event hub with webhooks, DLQ, and real-time subscriptions.
 ├── sdk/
 │   ├── typescript/     # TypeScript SDK (npm: notif.sh)
 │   └── python/         # Python SDK (pip: notifsh)
-├── tests/e2e/          # E2E tests (testcontainers)
+├── tests/
+│   ├── e2e/            # E2E tests (testcontainers)
+│   └── integration/    # Integration tests (requires running server)
 └── web/                # Frontend (TanStack Start)
 ```
 
@@ -77,6 +80,13 @@ API key format: `nsh_` + 28 alphanumeric chars (regex: `^nsh_[a-zA-Z0-9]{28}$`)
 | GET | `/api/v1/stats/events` | Event stats |
 | GET | `/api/v1/stats/webhooks` | Webhook stats |
 | GET | `/api/v1/stats/dlq` | DLQ stats |
+| **Schedules** | | |
+| POST | `/api/v1/schedules` | Create scheduled event |
+| GET | `/api/v1/schedules` | List scheduled events |
+| GET | `/api/v1/schedules/:id` | Get scheduled event |
+| DELETE | `/api/v1/schedules/:id` | Cancel scheduled event |
+| POST | `/api/v1/schedules/:id/run` | Execute immediately |
+| GET | `/api/v1/schedules/stats` | Schedule statistics |
 | **API Keys** (Clerk-only) | | |
 | POST | `/api/v1/api-keys` | Create key |
 | GET | `/api/v1/api-keys` | List keys |
@@ -106,7 +116,8 @@ make watch        # Run server with hot reload (requires air)
 make build        # Build server binary
 make build-cli    # Build CLI binary
 make test         # Run unit tests
-make test-e2e     # Run e2e tests
+make test-e2e     # Run e2e tests (Docker)
+make test-integration  # Run integration tests (requires: make dev && make seed && make run)
 make migrate      # Run migrations
 make generate     # Run sqlc generate
 ```
