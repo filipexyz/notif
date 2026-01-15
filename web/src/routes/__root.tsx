@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 
 import { TopNav } from '../components/layout/TopNav'
 import { queryClient } from '../lib/query'
+import { isAnonymousMode } from '../lib/api'
 
 import appCss from '../styles.css?url'
 
@@ -45,6 +46,17 @@ export const Route = createRootRoute({
   component: RootComponent,
 })
 
+function AppContent() {
+  return (
+    <div className="h-screen flex flex-col overflow-hidden">
+      <TopNav />
+      <main className="flex-1 min-h-0">
+        <Outlet />
+      </main>
+    </div>
+  )
+}
+
 function RootComponent() {
   return (
     <ClerkProvider>
@@ -54,27 +66,35 @@ function RootComponent() {
             <HeadContent />
           </head>
           <body>
-            <SignedIn>
-              <div className="h-screen flex flex-col overflow-hidden">
-                <TopNav />
-                <main className="flex-1 min-h-0">
-                  <Outlet />
-                </main>
-              </div>
-            </SignedIn>
-            <SignedOut>
-              <div className="min-h-screen flex items-center justify-center bg-neutral-50">
-                <div className="text-center">
-                  <h1 className="text-2xl font-semibold text-neutral-900 mb-2">notif.sh</h1>
-                  <p className="text-neutral-500 mb-6">Managed pub/sub event hub</p>
-                  <SignInButton mode="modal">
-                    <button className="px-6 py-2.5 bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors">
-                      Sign in
-                    </button>
-                  </SignInButton>
+            {isAnonymousMode ? (
+              // Anonymous mode: bypass Clerk auth for local development
+              <>
+                <AppContent />
+                <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-warning text-warning-foreground text-xs font-medium">
+                  Anonymous Mode
                 </div>
-              </div>
-            </SignedOut>
+              </>
+            ) : (
+              // Normal mode: require Clerk authentication
+              <>
+                <SignedIn>
+                  <AppContent />
+                </SignedIn>
+                <SignedOut>
+                  <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+                    <div className="text-center">
+                      <h1 className="text-2xl font-semibold text-neutral-900 mb-2">notif.sh</h1>
+                      <p className="text-neutral-500 mb-6">Managed pub/sub event hub</p>
+                      <SignInButton mode="modal">
+                        <button className="px-6 py-2.5 bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors">
+                          Sign in
+                        </button>
+                      </SignInButton>
+                    </div>
+                  </div>
+                </SignedOut>
+              </>
+            )}
             <Scripts />
           </body>
         </html>

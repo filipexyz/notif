@@ -13,8 +13,10 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as DlqRouteImport } from './routes/dlq'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WebhooksIndexRouteImport } from './routes/webhooks/index'
+import { Route as SchedulesIndexRouteImport } from './routes/schedules/index'
 import { Route as WebhooksNewRouteImport } from './routes/webhooks/new'
 import { Route as WebhooksIdRouteImport } from './routes/webhooks/$id'
+import { Route as SchedulesIdRouteImport } from './routes/schedules/$id'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -36,6 +38,11 @@ const WebhooksIndexRoute = WebhooksIndexRouteImport.update({
   path: '/webhooks/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SchedulesIndexRoute = SchedulesIndexRouteImport.update({
+  id: '/schedules/',
+  path: '/schedules/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WebhooksNewRoute = WebhooksNewRouteImport.update({
   id: '/webhooks/new',
   path: '/webhooks/new',
@@ -46,21 +53,30 @@ const WebhooksIdRoute = WebhooksIdRouteImport.update({
   path: '/webhooks/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SchedulesIdRoute = SchedulesIdRouteImport.update({
+  id: '/schedules/$id',
+  path: '/schedules/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dlq': typeof DlqRoute
   '/settings': typeof SettingsRoute
+  '/schedules/$id': typeof SchedulesIdRoute
   '/webhooks/$id': typeof WebhooksIdRoute
   '/webhooks/new': typeof WebhooksNewRoute
+  '/schedules': typeof SchedulesIndexRoute
   '/webhooks': typeof WebhooksIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dlq': typeof DlqRoute
   '/settings': typeof SettingsRoute
+  '/schedules/$id': typeof SchedulesIdRoute
   '/webhooks/$id': typeof WebhooksIdRoute
   '/webhooks/new': typeof WebhooksNewRoute
+  '/schedules': typeof SchedulesIndexRoute
   '/webhooks': typeof WebhooksIndexRoute
 }
 export interface FileRoutesById {
@@ -68,8 +84,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dlq': typeof DlqRoute
   '/settings': typeof SettingsRoute
+  '/schedules/$id': typeof SchedulesIdRoute
   '/webhooks/$id': typeof WebhooksIdRoute
   '/webhooks/new': typeof WebhooksNewRoute
+  '/schedules/': typeof SchedulesIndexRoute
   '/webhooks/': typeof WebhooksIndexRoute
 }
 export interface FileRouteTypes {
@@ -78,24 +96,30 @@ export interface FileRouteTypes {
     | '/'
     | '/dlq'
     | '/settings'
+    | '/schedules/$id'
     | '/webhooks/$id'
     | '/webhooks/new'
+    | '/schedules'
     | '/webhooks'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/dlq'
     | '/settings'
+    | '/schedules/$id'
     | '/webhooks/$id'
     | '/webhooks/new'
+    | '/schedules'
     | '/webhooks'
   id:
     | '__root__'
     | '/'
     | '/dlq'
     | '/settings'
+    | '/schedules/$id'
     | '/webhooks/$id'
     | '/webhooks/new'
+    | '/schedules/'
     | '/webhooks/'
   fileRoutesById: FileRoutesById
 }
@@ -103,8 +127,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DlqRoute: typeof DlqRoute
   SettingsRoute: typeof SettingsRoute
+  SchedulesIdRoute: typeof SchedulesIdRoute
   WebhooksIdRoute: typeof WebhooksIdRoute
   WebhooksNewRoute: typeof WebhooksNewRoute
+  SchedulesIndexRoute: typeof SchedulesIndexRoute
   WebhooksIndexRoute: typeof WebhooksIndexRoute
 }
 
@@ -138,6 +164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WebhooksIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/schedules/': {
+      id: '/schedules/'
+      path: '/schedules'
+      fullPath: '/schedules'
+      preLoaderRoute: typeof SchedulesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/webhooks/new': {
       id: '/webhooks/new'
       path: '/webhooks/new'
@@ -152,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WebhooksIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/schedules/$id': {
+      id: '/schedules/$id'
+      path: '/schedules/$id'
+      fullPath: '/schedules/$id'
+      preLoaderRoute: typeof SchedulesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -159,8 +199,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DlqRoute: DlqRoute,
   SettingsRoute: SettingsRoute,
+  SchedulesIdRoute: SchedulesIdRoute,
   WebhooksIdRoute: WebhooksIdRoute,
   WebhooksNewRoute: WebhooksNewRoute,
+  SchedulesIndexRoute: SchedulesIndexRoute,
   WebhooksIndexRoute: WebhooksIndexRoute,
 }
 export const routeTree = rootRouteImport
