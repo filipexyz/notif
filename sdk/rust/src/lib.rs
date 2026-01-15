@@ -85,4 +85,7 @@ mod types;
 pub use client::{Notif, NotifBuilder};
 pub use error::{NotifError, Result};
 pub use subscribe::EventStream;
-pub use types::{EmitResponse, Event, SubscribeOptions};
+pub use types::{
+    CreateScheduleResponse, EmitResponse, Event, ListSchedulesResponse, RunScheduleResponse,
+    Schedule, SubscribeOptions,
+};

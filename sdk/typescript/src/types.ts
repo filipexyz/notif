@@ -22,6 +22,47 @@ export interface EmitResponse {
   created_at: string
 }
 
+// Schedule types
+
+export interface ScheduleOptions {
+  scheduledFor?: Date
+  in?: string  // Duration string like "5m", "1h"
+}
+
+export interface CreateScheduleResponse {
+  id: string
+  topic: string
+  scheduled_for: string
+  created_at: string
+}
+
+export interface Schedule {
+  id: string
+  topic: string
+  data: Record<string, unknown>
+  scheduled_for: string
+  status: 'pending' | 'completed' | 'cancelled' | 'failed'
+  error?: string
+  created_at: string
+  executed_at?: string
+}
+
+export interface ListSchedulesOptions {
+  status?: string
+  limit?: number
+  offset?: number
+}
+
+export interface ListSchedulesResponse {
+  schedules: Schedule[]
+  total: number
+}
+
+export interface RunScheduleResponse {
+  schedule_id: string
+  event_id: string
+}
+
 export interface Event {
   id: string
   topic: string

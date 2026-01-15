@@ -3,13 +3,24 @@
 from .client import Notif
 from .errors import APIError, AuthError, ConnectionError, NotifError
 from .events import EventStream
-from .types import EmitResponse, Event
+from .types import (
+    CreateScheduleResponse,
+    EmitResponse,
+    Event,
+    ListSchedulesResponse,
+    RunScheduleResponse,
+    Schedule,
+)
 
 __all__ = [
     "Notif",
     "Event",
     "EventStream",
     "EmitResponse",
+    "CreateScheduleResponse",
+    "Schedule",
+    "ListSchedulesResponse",
+    "RunScheduleResponse",
     "NotifError",
     "APIError",
     "AuthError",

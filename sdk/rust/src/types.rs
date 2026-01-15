@@ -185,3 +185,71 @@ pub(crate) struct EmitRequest<'a, T: Serialize> {
     pub topic: &'a str,
     pub data: T,
 }
+
+// Schedule types
+
+/// Response from creating a scheduled event.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct CreateScheduleResponse {
+    /// Schedule ID.
+    pub id: String,
+    /// Topic the event will be published to.
+    pub topic: String,
+    /// When the event is scheduled to be emitted.
+    pub scheduled_for: DateTime<Utc>,
+    /// When the schedule was created.
+    pub created_at: DateTime<Utc>,
+}
+
+/// A scheduled event.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct Schedule {
+    /// Schedule ID.
+    pub id: String,
+    /// Topic the event will be published to.
+    pub topic: String,
+    /// Event payload.
+    pub data: serde_json::Value,
+    /// When the event is scheduled to be emitted.
+    pub scheduled_for: DateTime<Utc>,
+    /// Status: pending, completed, cancelled, failed.
+    pub status: String,
+    /// Error message if failed.
+    pub error: Option<String>,
+    /// When the schedule was created.
+    pub created_at: DateTime<Utc>,
+    /// When the event was executed (if completed).
+    pub executed_at: Option<DateTime<Utc>>,
+}
+
+/// Response from listing scheduled events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct ListSchedulesResponse {
+    /// List of schedules.
+    pub schedules: Vec<Schedule>,
+    /// Total count (for pagination).
+    pub total: i64,
+}
+
+/// Response from running a scheduled event immediately.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct RunScheduleResponse {
+    /// Schedule ID.
+    pub schedule_id: String,
+    /// Emitted event ID.
+    pub event_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct CreateScheduleRequest<'a, T: Serialize> {
+    pub topic: &'a str,
+    pub data: T,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheduled_for: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "in")]
+    pub in_duration: Option<&'a str>,
+}

@@ -6,4 +6,10 @@ export type {
   SubscribeOptions,
   EmitResponse,
   Event,
+  ScheduleOptions,
+  CreateScheduleResponse,
+  Schedule,
+  ListSchedulesOptions,
+  ListSchedulesResponse,
+  RunScheduleResponse,
 } from './types.js'

@@ -10,7 +10,13 @@ from .constants import API_KEY_PREFIX, DEFAULT_SERVER, DEFAULT_TIMEOUT, ENV_VAR_
 from .errors import APIError, AuthError
 from .errors import ConnectionError as NotifConnectionError
 from .events import EventStream
-from .types import EmitResponse
+from .types import (
+    CreateScheduleResponse,
+    EmitResponse,
+    ListSchedulesResponse,
+    RunScheduleResponse,
+    Schedule,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -154,6 +160,210 @@ class Notif:
         stream._on_close = lambda: self._active_streams.discard(stream)
 
         return stream
+
+    async def schedule(
+        self,
+        topic: str,
+        data: dict[str, Any],
+        *,
+        scheduled_for: datetime | None = None,
+        in_: str | None = None,
+    ) -> CreateScheduleResponse:
+        """
+        Schedule an event to be emitted at a future time.
+
+        Args:
+            topic: The topic to publish to.
+            data: The event payload (must be JSON-serializable).
+            scheduled_for: Absolute time to emit the event.
+            in_: Relative delay (e.g., '5m', '1h').
+
+        Returns:
+            CreateScheduleResponse with the schedule id and scheduled time.
+
+        Raises:
+            AuthError: If authentication fails.
+            APIError: If the API returns an error.
+            ConnectionError: If there's a network error.
+        """
+        client = await self._get_client()
+
+        body: dict[str, Any] = {"topic": topic, "data": data}
+        if scheduled_for is not None:
+            body["scheduled_for"] = scheduled_for.isoformat()
+        if in_ is not None:
+            body["in"] = in_
+
+        try:
+            response = await client.post(f"{self._server}/api/v1/schedules", json=body)
+        except httpx.RequestError as e:
+            raise NotifConnectionError(str(e), cause=e) from e
+
+        if response.status_code == 401:
+            raise AuthError()
+
+        if response.status_code not in (200, 201):
+            body = response.json() if response.content else {}
+            raise APIError(response.status_code, body.get("error", "schedule failed"))
+
+        result = response.json()
+        return CreateScheduleResponse(
+            id=result["id"],
+            topic=result["topic"],
+            scheduled_for=datetime.fromisoformat(result["scheduled_for"].replace("Z", "+00:00")),
+            created_at=datetime.fromisoformat(result["created_at"].replace("Z", "+00:00")),
+        )
+
+    async def list_schedules(
+        self,
+        *,
+        status: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> ListSchedulesResponse:
+        """
+        List scheduled events.
+
+        Args:
+            status: Filter by status (pending, completed, cancelled, failed).
+            limit: Maximum number of results.
+            offset: Offset for pagination.
+
+        Returns:
+            ListSchedulesResponse with schedules and total count.
+        """
+        client = await self._get_client()
+
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
+
+        try:
+            response = await client.get(f"{self._server}/api/v1/schedules", params=params)
+        except httpx.RequestError as e:
+            raise NotifConnectionError(str(e), cause=e) from e
+
+        if response.status_code == 401:
+            raise AuthError()
+
+        if response.status_code != 200:
+            body = response.json() if response.content else {}
+            raise APIError(response.status_code, body.get("error", "list schedules failed"))
+
+        result = response.json()
+        schedules = [
+            Schedule(
+                id=s["id"],
+                topic=s["topic"],
+                data=s["data"],
+                scheduled_for=datetime.fromisoformat(s["scheduled_for"].replace("Z", "+00:00")),
+                status=s["status"],
+                created_at=datetime.fromisoformat(s["created_at"].replace("Z", "+00:00")),
+                error=s.get("error"),
+                executed_at=(
+                    datetime.fromisoformat(s["executed_at"].replace("Z", "+00:00"))
+                    if s.get("executed_at")
+                    else None
+                ),
+            )
+            for s in result.get("schedules", [])
+        ]
+        return ListSchedulesResponse(schedules=schedules, total=result.get("total", 0))
+
+    async def get_schedule(self, schedule_id: str) -> Schedule:
+        """
+        Get a specific scheduled event.
+
+        Args:
+            schedule_id: The schedule ID.
+
+        Returns:
+            The Schedule details.
+        """
+        client = await self._get_client()
+
+        try:
+            response = await client.get(f"{self._server}/api/v1/schedules/{schedule_id}")
+        except httpx.RequestError as e:
+            raise NotifConnectionError(str(e), cause=e) from e
+
+        if response.status_code == 401:
+            raise AuthError()
+
+        if response.status_code != 200:
+            body = response.json() if response.content else {}
+            raise APIError(response.status_code, body.get("error", "get schedule failed"))
+
+        s = response.json()
+        return Schedule(
+            id=s["id"],
+            topic=s["topic"],
+            data=s["data"],
+            scheduled_for=datetime.fromisoformat(s["scheduled_for"].replace("Z", "+00:00")),
+            status=s["status"],
+            created_at=datetime.fromisoformat(s["created_at"].replace("Z", "+00:00")),
+            error=s.get("error"),
+            executed_at=(
+                datetime.fromisoformat(s["executed_at"].replace("Z", "+00:00"))
+                if s.get("executed_at")
+                else None
+            ),
+        )
+
+    async def cancel_schedule(self, schedule_id: str) -> None:
+        """
+        Cancel a pending scheduled event.
+
+        Args:
+            schedule_id: The schedule ID to cancel.
+        """
+        client = await self._get_client()
+
+        try:
+            response = await client.delete(f"{self._server}/api/v1/schedules/{schedule_id}")
+        except httpx.RequestError as e:
+            raise NotifConnectionError(str(e), cause=e) from e
+
+        if response.status_code == 401:
+            raise AuthError()
+
+        if response.status_code not in (200, 204):
+            body = response.json() if response.content else {}
+            raise APIError(response.status_code, body.get("error", "cancel schedule failed"))
+
+    async def run_schedule(self, schedule_id: str) -> RunScheduleResponse:
+        """
+        Execute a scheduled event immediately.
+
+        Args:
+            schedule_id: The schedule ID to run.
+
+        Returns:
+            RunScheduleResponse with the schedule ID and emitted event ID.
+        """
+        client = await self._get_client()
+
+        try:
+            response = await client.post(f"{self._server}/api/v1/schedules/{schedule_id}/run")
+        except httpx.RequestError as e:
+            raise NotifConnectionError(str(e), cause=e) from e
+
+        if response.status_code == 401:
+            raise AuthError()
+
+        if response.status_code != 200:
+            body = response.json() if response.content else {}
+            raise APIError(response.status_code, body.get("error", "run schedule failed"))
+
+        result = response.json()
+        return RunScheduleResponse(
+            schedule_id=result["schedule_id"],
+            event_id=result["event_id"],
+        )
 
     @property
     def server_url(self) -> str:

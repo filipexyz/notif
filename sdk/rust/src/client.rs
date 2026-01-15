@@ -9,7 +9,12 @@ use serde::Serialize;
 
 use crate::error::{NotifError, Result};
 use crate::subscribe::EventStream;
-use crate::types::{EmitRequest, EmitResponse, SubscribeOptions};
+use chrono::{DateTime, Utc};
+
+use crate::types::{
+    CreateScheduleRequest, CreateScheduleResponse, EmitRequest, EmitResponse,
+    ListSchedulesResponse, RunScheduleResponse, Schedule, SubscribeOptions,
+};
 
 const DEFAULT_SERVER: &str = "https://api.notif.sh";
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
@@ -247,5 +252,204 @@ impl Notif {
         options: SubscribeOptions,
     ) -> Result<EventStream> {
         EventStream::connect(self.inner.clone(), topics, options).await
+    }
+
+    /// Schedule an event to be emitted at a future time.
+    ///
+    /// # Arguments
+    ///
+    /// * `topic` - The topic to publish to
+    /// * `data` - The event payload (any serializable type)
+    /// * `scheduled_for` - Absolute time to emit the event
+    /// * `in_duration` - Relative delay (e.g., "5m", "1h")
+    ///
+    /// At least one of `scheduled_for` or `in_duration` must be provided.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use notifsh::Notif;
+    /// # use serde_json::json;
+    /// # async fn example() -> notifsh::Result<()> {
+    /// let client = Notif::from_env()?;
+    ///
+    /// // Schedule with relative delay
+    /// client.schedule("orders.reminder", json!({"order_id": "123"}), None, Some("30m")).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn schedule<T: Serialize>(
+        &self,
+        topic: &str,
+        data: T,
+        scheduled_for: Option<DateTime<Utc>>,
+        in_duration: Option<&str>,
+    ) -> Result<CreateScheduleResponse> {
+        let url = format!("{}/api/v1/schedules", self.inner.server);
+
+        let request = CreateScheduleRequest {
+            topic,
+            data,
+            scheduled_for,
+            in_duration,
+        };
+
+        let response = self
+            .inner
+            .http_client
+            .post(&url)
+            .bearer_auth(&self.inner.api_key)
+            .json(&request)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_default();
+            if status.as_u16() == 401 {
+                return Err(NotifError::auth(message));
+            }
+            return Err(NotifError::api(status.as_u16(), message));
+        }
+
+        let schedule_response: CreateScheduleResponse = response.json().await?;
+        Ok(schedule_response)
+    }
+
+    /// List scheduled events.
+    ///
+    /// # Arguments
+    ///
+    /// * `status` - Filter by status (pending, completed, cancelled, failed)
+    /// * `limit` - Maximum number of results
+    /// * `offset` - Offset for pagination
+    pub async fn list_schedules(
+        &self,
+        status: Option<&str>,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> Result<ListSchedulesResponse> {
+        let mut url = format!("{}/api/v1/schedules", self.inner.server);
+
+        let mut params = Vec::new();
+        if let Some(s) = status {
+            params.push(format!("status={}", s));
+        }
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(o) = offset {
+            params.push(format!("offset={}", o));
+        }
+        if !params.is_empty() {
+            url.push('?');
+            url.push_str(&params.join("&"));
+        }
+
+        let response = self
+            .inner
+            .http_client
+            .get(&url)
+            .bearer_auth(&self.inner.api_key)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_default();
+            if status.as_u16() == 401 {
+                return Err(NotifError::auth(message));
+            }
+            return Err(NotifError::api(status.as_u16(), message));
+        }
+
+        let list_response: ListSchedulesResponse = response.json().await?;
+        Ok(list_response)
+    }
+
+    /// Get a specific scheduled event.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The schedule ID
+    pub async fn get_schedule(&self, id: &str) -> Result<Schedule> {
+        let url = format!("{}/api/v1/schedules/{}", self.inner.server, id);
+
+        let response = self
+            .inner
+            .http_client
+            .get(&url)
+            .bearer_auth(&self.inner.api_key)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_default();
+            if status.as_u16() == 401 {
+                return Err(NotifError::auth(message));
+            }
+            return Err(NotifError::api(status.as_u16(), message));
+        }
+
+        let schedule: Schedule = response.json().await?;
+        Ok(schedule)
+    }
+
+    /// Cancel a pending scheduled event.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The schedule ID to cancel
+    pub async fn cancel_schedule(&self, id: &str) -> Result<()> {
+        let url = format!("{}/api/v1/schedules/{}", self.inner.server, id);
+
+        let response = self
+            .inner
+            .http_client
+            .delete(&url)
+            .bearer_auth(&self.inner.api_key)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_default();
+            if status.as_u16() == 401 {
+                return Err(NotifError::auth(message));
+            }
+            return Err(NotifError::api(status.as_u16(), message));
+        }
+
+        Ok(())
+    }
+
+    /// Execute a scheduled event immediately.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The schedule ID to run
+    pub async fn run_schedule(&self, id: &str) -> Result<RunScheduleResponse> {
+        let url = format!("{}/api/v1/schedules/{}/run", self.inner.server, id);
+
+        let response = self
+            .inner
+            .http_client
+            .post(&url)
+            .bearer_auth(&self.inner.api_key)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_default();
+            if status.as_u16() == 401 {
+                return Err(NotifError::auth(message));
+            }
+            return Err(NotifError::api(status.as_u16(), message));
+        }
+
+        let run_response: RunScheduleResponse = response.json().await?;
+        Ok(run_response)
     }
 }

@@ -195,4 +195,224 @@ describe('Notif', () => {
       expect(stream2.isConnected).toBe(false)
     })
   })
+
+  describe('schedule', () => {
+    it('sends POST request with scheduledFor option', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve({
+          id: 'sch_123',
+          topic: 'test.topic',
+          scheduled_for: '2025-01-15T10:00:00Z',
+          created_at: '2025-01-01T00:00:00Z',
+        }),
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const client = new Notif({ apiKey: validApiKey })
+      const scheduledFor = new Date('2025-01-15T10:00:00Z')
+      const result = await client.schedule('test.topic', { foo: 'bar' }, { scheduledFor })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.notif.sh/api/v1/schedules',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${validApiKey}`,
+          },
+          body: JSON.stringify({
+            topic: 'test.topic',
+            data: { foo: 'bar' },
+            scheduled_for: '2025-01-15T10:00:00.000Z',
+          }),
+        })
+      )
+      expect(result.id).toBe('sch_123')
+    })
+
+    it('sends POST request with in option', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve({
+          id: 'sch_123',
+          topic: 'test.topic',
+          scheduled_for: '2025-01-01T00:30:00Z',
+          created_at: '2025-01-01T00:00:00Z',
+        }),
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const client = new Notif({ apiKey: validApiKey })
+      const result = await client.schedule('test.topic', { foo: 'bar' }, { in: '30m' })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.notif.sh/api/v1/schedules',
+        expect.objectContaining({
+          body: JSON.stringify({
+            topic: 'test.topic',
+            data: { foo: 'bar' },
+            in: '30m',
+          }),
+        })
+      )
+      expect(result.id).toBe('sch_123')
+    })
+
+    it('throws AuthError on 401 response', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const client = new Notif({ apiKey: validApiKey })
+      await expect(client.schedule('test', {}, { in: '5m' })).rejects.toThrow(AuthError)
+    })
+  })
+
+  describe('listSchedules', () => {
+    it('sends GET request with query parameters', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          schedules: [
+            {
+              id: 'sch_123',
+              topic: 'test.topic',
+              data: { foo: 'bar' },
+              scheduled_for: '2025-01-15T10:00:00Z',
+              status: 'pending',
+              created_at: '2025-01-01T00:00:00Z',
+            },
+          ],
+          total: 1,
+        }),
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const client = new Notif({ apiKey: validApiKey })
+      const result = await client.listSchedules({ status: 'pending', limit: 10, offset: 0 })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.notif.sh/api/v1/schedules?status=pending&limit=10&offset=0',
+        expect.objectContaining({
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${validApiKey}`,
+          },
+        })
+      )
+      expect(result.schedules).toHaveLength(1)
+      expect(result.total).toBe(1)
+    })
+
+    it('sends GET request without parameters', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ schedules: [], total: 0 }),
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const client = new Notif({ apiKey: validApiKey })
+      await client.listSchedules()
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.notif.sh/api/v1/schedules',
+        expect.anything()
+      )
+    })
+  })
+
+  describe('getSchedule', () => {
+    it('sends GET request with schedule ID', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          id: 'sch_123',
+          topic: 'test.topic',
+          data: { foo: 'bar' },
+          scheduled_for: '2025-01-15T10:00:00Z',
+          status: 'pending',
+          created_at: '2025-01-01T00:00:00Z',
+        }),
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const client = new Notif({ apiKey: validApiKey })
+      const result = await client.getSchedule('sch_123')
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.notif.sh/api/v1/schedules/sch_123',
+        expect.objectContaining({
+          method: 'GET',
+        })
+      )
+      expect(result.id).toBe('sch_123')
+      expect(result.status).toBe('pending')
+    })
+
+    it('throws APIError on 404 response', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ error: 'schedule not found' }),
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const client = new Notif({ apiKey: validApiKey })
+      await expect(client.getSchedule('sch_notfound')).rejects.toThrow(APIError)
+    })
+  })
+
+  describe('cancelSchedule', () => {
+    it('sends DELETE request with schedule ID', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const client = new Notif({ apiKey: validApiKey })
+      await client.cancelSchedule('sch_123')
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.notif.sh/api/v1/schedules/sch_123',
+        expect.objectContaining({
+          method: 'DELETE',
+        })
+      )
+    })
+  })
+
+  describe('runSchedule', () => {
+    it('sends POST request to run endpoint', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          schedule_id: 'sch_123',
+          event_id: 'evt_456',
+        }),
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const client = new Notif({ apiKey: validApiKey })
+      const result = await client.runSchedule('sch_123')
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.notif.sh/api/v1/schedules/sch_123/run',
+        expect.objectContaining({
+          method: 'POST',
+        })
+      )
+      expect(result.schedule_id).toBe('sch_123')
+      expect(result.event_id).toBe('evt_456')
+    })
+  })
 })
