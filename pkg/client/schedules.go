@@ -59,7 +59,7 @@ func (c *Client) Schedule(topic string, data json.RawMessage, scheduledFor *time
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.setAuthHeaders(httpReq)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -94,7 +94,7 @@ func (c *Client) ListSchedules(status string, limit, offset int) (*SchedulesList
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.setAuthHeaders(httpReq)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -124,7 +124,7 @@ func (c *Client) GetSchedule(id string) (*ScheduleResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.setAuthHeaders(httpReq)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -154,7 +154,7 @@ func (c *Client) CancelSchedule(id string) error {
 	if err != nil {
 		return err
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.setAuthHeaders(httpReq)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -179,7 +179,7 @@ func (c *Client) RunSchedule(id string) (*RunScheduleResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.setAuthHeaders(httpReq)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {

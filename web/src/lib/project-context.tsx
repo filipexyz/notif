@@ -1,9 +1,9 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 import type { Project } from './types'
 
 const PROJECT_STORAGE_KEY = 'notif_selected_project'
 
-// Sync read from localStorage to avoid race condition on page load
+// Read from localStorage (client-side only)
 function getStoredProject(): Project | null {
   if (typeof window === 'undefined') return null
   const stored = localStorage.getItem(PROJECT_STORAGE_KEY)
@@ -21,13 +21,24 @@ type ProjectContextType = {
   selectedProject: Project | null
   setSelectedProject: (project: Project | null) => void
   projectId: string | null
+  isHydrated: boolean // True once client-side hydration is complete
 }
 
 const ProjectContext = createContext<ProjectContextType | null>(null)
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
-  // Initialize synchronously from localStorage to avoid race condition
-  const [selectedProject, setSelectedProjectState] = useState<Project | null>(getStoredProject)
+  // Start with null, then hydrate from localStorage on client
+  const [selectedProject, setSelectedProjectState] = useState<Project | null>(null)
+  const [isHydrated, setIsHydrated] = useState(false)
+
+  // Hydrate from localStorage on client mount
+  useEffect(() => {
+    const stored = getStoredProject()
+    if (stored) {
+      setSelectedProjectState(stored)
+    }
+    setIsHydrated(true)
+  }, [])
 
   const setSelectedProject = useCallback((project: Project | null) => {
     const currentId = getStoredProject()?.id
@@ -52,6 +63,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         selectedProject,
         setSelectedProject,
         projectId: selectedProject?.id ?? null,
+        isHydrated,
       }}
     >
       {children}

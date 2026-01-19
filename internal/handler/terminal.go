@@ -76,13 +76,13 @@ func (h *TerminalHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("terminal websocket connected", "user_id", *authCtx.UserID)
+	slog.Info("terminal websocket connected", "user_id", *authCtx.UserID, "project_id", authCtx.ProjectID)
 
 	// Handle connection
-	h.handleConnection(conn, *authCtx.UserID, authCtx.OrgID, jwt)
+	h.handleConnection(conn, *authCtx.UserID, authCtx.OrgID, authCtx.ProjectID, jwt)
 }
 
-func (h *TerminalHandler) handleConnection(conn *ws.Conn, userID, orgID, jwt string) {
+func (h *TerminalHandler) handleConnection(conn *ws.Conn, userID, orgID, projectID, jwt string) {
 	defer conn.Close()
 
 	// Wait for connect message with terminal size
@@ -109,7 +109,7 @@ func (h *TerminalHandler) handleConnection(conn *ws.Conn, userID, orgID, jwt str
 	}
 
 	// Create session
-	session, err := h.manager.CreateSession(userID, orgID, jwt, cols, rows)
+	session, err := h.manager.CreateSession(userID, orgID, projectID, jwt, cols, rows)
 	if err != nil {
 		slog.Error("failed to create terminal session", "error", err)
 		h.sendError(conn, "SESSION_ERROR", err.Error())

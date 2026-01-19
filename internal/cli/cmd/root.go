@@ -13,6 +13,7 @@ import (
 var (
 	cfgFile    string
 	serverURL  string
+	projectID  string
 	jsonOutput bool
 	cfg        *config.Config
 	out        *output.Output
@@ -50,6 +51,11 @@ var rootCmd = &cobra.Command{
 				serverURL = client.DefaultServer
 			}
 		}
+
+		// Project ID from env (for web terminal / JWT auth)
+		if projectID == "" {
+			projectID = os.Getenv("NOTIF_PROJECT_ID")
+		}
 	},
 }
 
@@ -70,5 +76,9 @@ func init() {
 // getClient creates a client with current config.
 func getClient() *client.Client {
 	apiKey := cfg.APIKey
-	return client.New(apiKey, client.WithServer(serverURL))
+	opts := []client.Option{client.WithServer(serverURL)}
+	if projectID != "" {
+		opts = append(opts, client.WithProjectID(projectID))
+	}
+	return client.New(apiKey, opts...)
 }

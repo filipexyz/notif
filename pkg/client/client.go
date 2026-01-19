@@ -14,6 +14,7 @@ const (
 type Client struct {
 	apiKey     string
 	server     string
+	projectID  string // For JWT auth - sent as X-Project-ID header
 	httpClient *http.Client
 }
 
@@ -60,7 +61,22 @@ func WithTimeout(timeout time.Duration) Option {
 	}
 }
 
+// WithProjectID sets the project ID for JWT auth (sent as X-Project-ID header).
+func WithProjectID(projectID string) Option {
+	return func(c *Client) {
+		c.projectID = projectID
+	}
+}
+
 // ServerURL returns the configured server URL.
 func (c *Client) ServerURL() string {
 	return c.server
+}
+
+// setAuthHeaders sets authorization and project headers on a request.
+func (c *Client) setAuthHeaders(req *http.Request) {
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.projectID != "" {
+		req.Header.Set("X-Project-ID", c.projectID)
+	}
 }

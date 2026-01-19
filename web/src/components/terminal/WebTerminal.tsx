@@ -3,7 +3,7 @@ import { useAuth } from '@clerk/tanstack-react-start'
 import type { Terminal as TerminalType } from '@xterm/xterm'
 import type { FitAddon as FitAddonType } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { useProjectId } from '../../lib/project-context'
+import { useProject } from '../../lib/project-context'
 
 const WS_BASE = import.meta.env.VITE_API_URL?.replace('http', 'ws') || 'ws://localhost:8080'
 
@@ -31,7 +31,7 @@ export function WebTerminal({ className, onConnectionChange }: WebTerminalProps)
   const fitAddonRef = useRef<FitAddonType | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const { getToken } = useAuth()
-  const projectId = useProjectId()
+  const { projectId, isHydrated } = useProject()
   const [state, setState] = useState<ConnectionState>('disconnected')
 
   const updateState = useCallback((newState: ConnectionState) => {

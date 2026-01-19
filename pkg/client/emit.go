@@ -38,7 +38,7 @@ func (c *Client) Emit(topic string, data json.RawMessage) (*EmitResponse, error)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.setAuthHeaders(httpReq)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {

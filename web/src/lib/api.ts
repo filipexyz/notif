@@ -7,12 +7,13 @@ const DEV_API_KEY = import.meta.env.VITE_DEV_API_KEY
 
 // Hook to check if project context is ready for queries
 // Use this with React Query's `enabled` option to prevent queries from firing
-// before a project is selected
+// before a project is selected and hydration is complete
 export function useProjectReady() {
-  const { selectedProject } = useProject()
+  const { selectedProject, isHydrated } = useProject()
   // In anonymous mode with API key, project is derived from key so always ready
-  if (ANONYMOUS_MODE && DEV_API_KEY) return true
-  return selectedProject !== null
+  // But still need to wait for hydration
+  if (ANONYMOUS_MODE && DEV_API_KEY) return isHydrated
+  return isHydrated && selectedProject !== null
 }
 
 export class ApiError extends Error {

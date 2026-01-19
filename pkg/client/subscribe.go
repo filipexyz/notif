@@ -41,6 +41,9 @@ func (c *Client) Subscribe(ctx context.Context, topics []string, opts SubscribeO
 	wsURL := strings.Replace(c.server, "http://", "ws://", 1)
 	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
 	wsURL += "/ws"
+	if c.projectID != "" {
+		wsURL += "?project_id=" + c.projectID
+	}
 
 	// Set up headers with auth
 	header := http.Header{}

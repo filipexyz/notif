@@ -16,16 +16,17 @@ import (
 
 // Session represents an active terminal session.
 type Session struct {
-	ID       string
-	UserID   string
-	OrgID    string
-	JWT      string
-	PTY      *os.File
-	Cmd      *exec.Cmd
-	Created  time.Time
-	LastUsed time.Time
-	Cols     uint16
-	Rows     uint16
+	ID        string
+	UserID    string
+	OrgID     string
+	ProjectID string
+	JWT       string
+	PTY       *os.File
+	Cmd       *exec.Cmd
+	Created   time.Time
+	LastUsed  time.Time
+	Cols      uint16
+	Rows      uint16
 
 	mu     sync.Mutex
 	closed bool
@@ -106,18 +107,19 @@ func generateSessionID() string {
 }
 
 // CreateSession spawns a new terminal session.
-func (m *Manager) CreateSession(userID, orgID, jwt string, cols, rows uint16) (*Session, error) {
+func (m *Manager) CreateSession(userID, orgID, projectID, jwt string, cols, rows uint16) (*Session, error) {
 	sessionID := generateSessionID()
 
 	session := &Session{
-		ID:       sessionID,
-		UserID:   userID,
-		OrgID:    orgID,
-		JWT:      jwt,
-		Created:  time.Now(),
-		LastUsed: time.Now(),
-		Cols:     cols,
-		Rows:     rows,
+		ID:        sessionID,
+		UserID:    userID,
+		OrgID:     orgID,
+		ProjectID: projectID,
+		JWT:       jwt,
+		Created:   time.Now(),
+		LastUsed:  time.Now(),
+		Cols:      cols,
+		Rows:      rows,
 	}
 
 	// Build CLI command
@@ -125,6 +127,7 @@ func (m *Manager) CreateSession(userID, orgID, jwt string, cols, rows uint16) (*
 	cmd.Env = append(os.Environ(),
 		"NOTIF_JWT="+jwt,
 		"NOTIF_SERVER="+m.server,
+		"NOTIF_PROJECT_ID="+projectID,
 		"TERM=xterm-256color",
 	)
 
