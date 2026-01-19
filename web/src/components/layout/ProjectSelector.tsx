@@ -21,10 +21,12 @@ export function ProjectSelector() {
 
   const projects = data?.projects ?? []
 
-  // Auto-select first project if none selected
+  // Auto-select default project if none selected
   useEffect(() => {
     if (!selectedProject && projects.length > 0) {
-      setSelectedProject(projects[0])
+      // Prefer the "default" project, otherwise use the first one
+      const defaultProject = projects.find(p => p.slug === 'default') || projects[0]
+      setSelectedProject(defaultProject)
     }
   }, [projects, selectedProject, setSelectedProject])
 

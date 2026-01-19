@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/tanstack-react-start'
 import type { Terminal as TerminalType } from '@xterm/xterm'
 import type { FitAddon as FitAddonType } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { useProjectId } from '../../lib/project-context'
 
 const WS_BASE = import.meta.env.VITE_API_URL?.replace('http', 'ws') || 'ws://localhost:8080'
 
@@ -30,6 +31,7 @@ export function WebTerminal({ className, onConnectionChange }: WebTerminalProps)
   const fitAddonRef = useRef<FitAddonType | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const { getToken } = useAuth()
+  const projectId = useProjectId()
   const [state, setState] = useState<ConnectionState>('disconnected')
 
   const updateState = useCallback((newState: ConnectionState) => {
@@ -53,6 +55,12 @@ export function WebTerminal({ className, onConnectionChange }: WebTerminalProps)
     const term = termRef.current
     if (!term) return
 
+    // Wait for project to be selected before connecting
+    if (!projectId) {
+      term.writeln('\x1b[33m[Waiting for project selection...]\x1b[0m')
+      return
+    }
+
     updateState('connecting')
 
     try {
@@ -61,6 +69,8 @@ export function WebTerminal({ className, onConnectionChange }: WebTerminalProps)
       if (token) {
         url.searchParams.set('token', token)
       }
+      // Include project ID for proper context
+      url.searchParams.set('project_id', projectId)
 
       const ws = new WebSocket(url.toString())
       wsRef.current = ws
@@ -121,7 +131,7 @@ export function WebTerminal({ className, onConnectionChange }: WebTerminalProps)
       updateState('error')
       termRef.current?.writeln(`\r\n\x1b[31m[Connection failed]\x1b[0m`)
     }
-  }, [getToken, updateState])
+  }, [getToken, updateState, projectId])
 
   // Initialize terminal
   useEffect(() => {
@@ -209,6 +219,14 @@ export function WebTerminal({ className, onConnectionChange }: WebTerminalProps)
       termRef.current?.dispose()
     }
   }, [connect, sendResize])
+
+  // Connect when projectId becomes available
+  useEffect(() => {
+    // Only try to connect if terminal is ready and we have a project but aren't connected yet
+    if (termRef.current && projectId && state === 'disconnected' && !wsRef.current) {
+      connect()
+    }
+  }, [projectId, state, connect])
 
   // Re-fit on container resize
   useEffect(() => {

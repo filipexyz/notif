@@ -1,9 +1,19 @@
 import { useAuth } from '@clerk/tanstack-react-start'
-import { useProjectId } from './project-context'
+import { useProjectId, useProject } from './project-context'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const ANONYMOUS_MODE = import.meta.env.VITE_ANONYMOUS_MODE === 'true'
 const DEV_API_KEY = import.meta.env.VITE_DEV_API_KEY
+
+// Hook to check if project context is ready for queries
+// Use this with React Query's `enabled` option to prevent queries from firing
+// before a project is selected
+export function useProjectReady() {
+  const { selectedProject } = useProject()
+  // In anonymous mode with API key, project is derived from key so always ready
+  if (ANONYMOUS_MODE && DEV_API_KEY) return true
+  return selectedProject !== null
+}
 
 export class ApiError extends Error {
   constructor(

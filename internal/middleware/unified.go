@@ -73,8 +73,12 @@ func UnifiedAuth(queries *db.Queries) func(http.Handler) http.Handler {
 					orgID = claims.Subject // personal account uses user_xxx as org
 				}
 
-				// Get project from X-Project-ID header or use default
+				// Get project from X-Project-ID header, query param, or use default
+				// Query param is used for WebSocket connections
 				projectID := r.Header.Get("X-Project-ID")
+				if projectID == "" {
+					projectID = r.URL.Query().Get("project_id")
+				}
 				if projectID == "" {
 					// Get or create default project for org
 					project, err := queries.GetOrCreateDefaultProject(r.Context(), db.GetOrCreateDefaultProjectParams{
