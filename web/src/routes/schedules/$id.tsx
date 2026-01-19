@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Play, X } from 'lucide-react'
 import { Button, Badge } from '../../components/ui'
-import { useApi } from '../../lib/api'
+import { useApi, useProjectReady } from '../../lib/api'
 import type { Schedule, RunScheduleResponse } from '../../lib/types'
 
 export const Route = createFileRoute('/schedules/$id')({
@@ -36,10 +36,12 @@ function ScheduleDetailPage() {
   const navigate = useNavigate()
   const api = useApi()
   const queryClient = useQueryClient()
+  const projectReady = useProjectReady()
 
   const { data: schedule, isLoading, error } = useQuery({
     queryKey: ['schedules', id],
     queryFn: () => api<Schedule>(`/api/v1/schedules/${id}`),
+    enabled: projectReady,
   })
 
   const cancelMutation = useMutation({

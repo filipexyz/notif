@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { RotateCcw, Trash2 } from 'lucide-react'
 import { Button, Badge } from '../components/ui'
-import { useApi } from '../lib/api'
+import { useApi, useProjectReady } from '../lib/api'
 import type { DLQEntry } from '../lib/types'
 
 export const Route = createFileRoute('/dlq')({
@@ -21,10 +21,12 @@ function formatTime(dateStr: string): string {
 function DLQPage() {
   const api = useApi()
   const queryClient = useQueryClient()
+  const projectReady = useProjectReady()
 
   const { data: dlqResponse, isLoading, error } = useQuery({
     queryKey: ['dlq'],
     queryFn: () => api<{ messages: DLQEntry[]; count: number }>('/api/v1/dlq'),
+    enabled: projectReady,
   })
   const dlqEntries = dlqResponse?.messages
 

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Trash2, RotateCcw, Copy, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { Button, Input, Badge } from '../../components/ui'
-import { useApi } from '../../lib/api'
+import { useApi, useProjectReady } from '../../lib/api'
 import type { Webhook, UpdateWebhookRequest, WebhookDelivery } from '../../lib/types'
 
 export const Route = createFileRoute('/webhooks/$id')({
@@ -30,10 +30,12 @@ function EditWebhookPage() {
   const navigate = useNavigate()
   const api = useApi()
   const queryClient = useQueryClient()
+  const projectReady = useProjectReady()
 
   const { data: webhook, isLoading, error } = useQuery({
     queryKey: ['webhooks', id],
     queryFn: () => api<Webhook>(`/api/v1/webhooks/${id}`),
+    enabled: projectReady,
   })
 
   const { data: deliveriesResponse } = useQuery({

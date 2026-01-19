@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Play, X, Eye } from 'lucide-react'
 import { Button, Badge } from '../../components/ui'
-import { useApi } from '../../lib/api'
+import { useApi, useProjectReady } from '../../lib/api'
 import type { Schedule, SchedulesResponse, RunScheduleResponse } from '../../lib/types'
 
 export const Route = createFileRoute('/schedules/')({
@@ -36,6 +36,7 @@ function StatusBadge({ status }: { status: Schedule['status'] }) {
 function SchedulesPage() {
   const api = useApi()
   const queryClient = useQueryClient()
+  const projectReady = useProjectReady()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   const { data: schedulesResponse, isLoading, error } = useQuery({
@@ -47,6 +48,7 @@ function SchedulesPage() {
       const query = params.toString()
       return api<SchedulesResponse>(`/api/v1/schedules${query ? `?${query}` : ''}`)
     },
+    enabled: projectReady,
   })
   const schedules = schedulesResponse?.schedules ?? []
 

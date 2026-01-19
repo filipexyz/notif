@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { Button, Badge } from '../../components/ui'
-import { useApi } from '../../lib/api'
+import { useApi, useProjectReady } from '../../lib/api'
 import type { Webhook } from '../../lib/types'
 
 export const Route = createFileRoute('/webhooks/')({
@@ -11,10 +11,12 @@ export const Route = createFileRoute('/webhooks/')({
 
 function WebhooksPage() {
   const api = useApi()
+  const projectReady = useProjectReady()
 
   const { data: webhooksResponse, isLoading, error } = useQuery({
     queryKey: ['webhooks'],
     queryFn: () => api<{ webhooks: Webhook[]; count: number }>('/api/v1/webhooks'),
+    enabled: projectReady,
   })
   const webhooks = webhooksResponse?.webhooks
 

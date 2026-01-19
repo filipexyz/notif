@@ -11,12 +11,13 @@ export function ProjectSelector() {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const api = useApi()
-  const { selectedProject, setSelectedProject } = useProject()
+  const { selectedProject, setSelectedProject, isHydrated } = useProject()
 
-  // Fetch projects
+  // Fetch projects (wait for hydration so auth context is ready)
   const { data, isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api<ProjectsResponse>('/api/v1/projects'),
+    enabled: isHydrated,
   })
 
   const projects = data?.projects ?? []

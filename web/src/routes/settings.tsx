@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Copy, Eye, EyeOff, Pencil, FolderOpen } from 'lucide-react'
 import { Button } from '../components/ui'
-import { useApi } from '../lib/api'
+import { useApi, useProjectReady } from '../lib/api'
 import { useProject } from '../lib/project-context'
 import type { APIKey, CreateAPIKeyResponse, Project, ProjectsResponse } from '../lib/types'
 
@@ -67,6 +67,7 @@ function APIKeysSection() {
   const api = useApi()
   const queryClient = useQueryClient()
   const { selectedProject } = useProject()
+  const projectReady = useProjectReady()
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newKeyName, setNewKeyName] = useState('')
@@ -76,6 +77,7 @@ function APIKeysSection() {
   const { data: apiKeysResponse, isLoading, error } = useQuery({
     queryKey: ['api-keys'],
     queryFn: () => api<{ api_keys: APIKey[]; count: number }>('/api/v1/api-keys'),
+    enabled: projectReady,
   })
 
   const apiKeys = apiKeysResponse?.api_keys ?? []
@@ -285,7 +287,7 @@ function APIKeysSection() {
 function ProjectsSection() {
   const api = useApi()
   const queryClient = useQueryClient()
-  const { selectedProject, setSelectedProject } = useProject()
+  const { selectedProject, setSelectedProject, isHydrated } = useProject()
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -296,6 +298,7 @@ function ProjectsSection() {
   const { data: projectsData, isLoading, error } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api<ProjectsResponse>('/api/v1/projects'),
+    enabled: isHydrated,
   })
 
   const projects = projectsData?.projects ?? []
