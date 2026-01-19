@@ -196,7 +196,6 @@ function APIKeysSection() {
               <tr className="border-b border-neutral-200 bg-neutral-50">
                 <th className="px-4 py-2 text-left text-sm font-medium text-neutral-700">Name</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-neutral-700">Key</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-neutral-700">Project</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-neutral-700">Created</th>
                 <th className="px-4 py-2 text-left text-sm font-medium text-neutral-700">Last Used</th>
                 <th className="px-4 py-2 text-right text-sm font-medium text-neutral-700">Actions</th>
@@ -210,9 +209,6 @@ function APIKeysSection() {
                   </td>
                   <td className="px-4 py-3 text-sm font-mono text-neutral-500">
                     {key.key_prefix}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-neutral-500">
-                    {key.project_name || key.project_id}
                   </td>
                   <td className="px-4 py-3 text-sm text-neutral-500">
                     {new Date(key.created_at).toLocaleDateString()}
