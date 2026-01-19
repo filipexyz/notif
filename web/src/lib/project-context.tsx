@@ -1,7 +1,22 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Project } from './types'
 
 const PROJECT_STORAGE_KEY = 'notif_selected_project'
+
+// Sync read from localStorage to avoid race condition on page load
+function getStoredProject(): Project | null {
+  if (typeof window === 'undefined') return null
+  const stored = localStorage.getItem(PROJECT_STORAGE_KEY)
+  if (stored) {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      localStorage.removeItem(PROJECT_STORAGE_KEY)
+    }
+  }
+  return null
+}
 
 type ProjectContextType = {
   selectedProject: Project | null
@@ -12,28 +27,23 @@ type ProjectContextType = {
 const ProjectContext = createContext<ProjectContextType | null>(null)
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
-  const [selectedProject, setSelectedProjectState] = useState<Project | null>(null)
+  // Initialize synchronously from localStorage to avoid race condition
+  const [selectedProject, setSelectedProjectState] = useState<Project | null>(getStoredProject)
+  const queryClient = useQueryClient()
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(PROJECT_STORAGE_KEY)
-    if (stored) {
-      try {
-        setSelectedProjectState(JSON.parse(stored))
-      } catch {
-        localStorage.removeItem(PROJECT_STORAGE_KEY)
-      }
-    }
-  }, [])
-
-  const setSelectedProject = (project: Project | null) => {
+  const setSelectedProject = useCallback((project: Project | null) => {
     setSelectedProjectState(project)
     if (project) {
       localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project))
     } else {
       localStorage.removeItem(PROJECT_STORAGE_KEY)
     }
-  }
+    // Invalidate all queries to refetch with new project context
+    // Exclude 'projects' query since that's org-level, not project-level
+    queryClient.invalidateQueries({
+      predicate: (query) => query.queryKey[0] !== 'projects',
+    })
+  }, [queryClient])
 
   return (
     <ProjectContext.Provider
