@@ -24,7 +24,8 @@ func NewAPIKeyHandler(queries *db.Queries) *APIKeyHandler {
 
 // CreateAPIKeyRequest is the request body for creating an API key.
 type CreateAPIKeyRequest struct {
-	Name string `json:"name"`
+	Name      string `json:"name"`
+	ProjectID string `json:"project_id,omitempty"` // Optional, defaults to current project
 }
 
 // APIKeyResponse is the response for an API key.
@@ -37,10 +38,10 @@ type APIKeyResponse struct {
 	LastUsedAt *string `json:"last_used_at,omitempty"`
 }
 
-// Create creates a new API key for the authenticated organization.
+// Create creates a new API key for the authenticated organization and project.
 func (h *APIKeyHandler) Create(w http.ResponseWriter, r *http.Request) {
-	session := middleware.GetClerkSession(r.Context())
-	if session == nil {
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil || authCtx.UserID == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -51,16 +52,37 @@ func (h *APIKeyHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Use project from request or current context
+	projectID := req.ProjectID
+	if projectID == "" {
+		projectID = authCtx.ProjectID
+	}
+	if projectID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "project_id is required"})
+		return
+	}
+
+	// Verify project belongs to org
+	_, err := h.queries.GetProjectByOrgAndID(r.Context(), db.GetProjectByOrgAndIDParams{
+		ID:    projectID,
+		OrgID: authCtx.OrgID,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid project_id"})
+		return
+	}
+
 	// Generate key
 	fullKey, prefix, hash := domain.GenerateAPIKey()
 
-	// Store with org_id
+	// Store with org_id and project_id
 	apiKey, err := h.queries.CreateAPIKey(r.Context(), db.CreateAPIKeyParams{
 		KeyHash:            hash,
 		KeyPrefix:          prefix,
 		Name:               pgtype.Text{String: req.Name, Valid: req.Name != ""},
 		RateLimitPerSecond: pgtype.Int4{Int32: 100, Valid: true},
-		OrgID:              pgtype.Text{String: session.OrgID, Valid: true},
+		OrgID:              pgtype.Text{String: authCtx.OrgID, Valid: true},
+		ProjectID:          projectID,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create API key"})
@@ -76,15 +98,18 @@ func (h *APIKeyHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// List lists all API keys for the authenticated organization.
+// List lists all API keys for the authenticated project.
 func (h *APIKeyHandler) List(w http.ResponseWriter, r *http.Request) {
-	session := middleware.GetClerkSession(r.Context())
-	if session == nil {
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil || authCtx.UserID == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	keys, err := h.queries.ListAPIKeysByOrg(r.Context(), pgtype.Text{String: session.OrgID, Valid: true})
+	keys, err := h.queries.ListAPIKeysByProject(r.Context(), db.ListAPIKeysByProjectParams{
+		OrgID:     pgtype.Text{String: authCtx.OrgID, Valid: true},
+		ProjectID: authCtx.ProjectID,
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list API keys"})
 		return
@@ -118,8 +143,8 @@ func (h *APIKeyHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Revoke revokes an API key (soft delete).
 func (h *APIKeyHandler) Revoke(w http.ResponseWriter, r *http.Request) {
-	session := middleware.GetClerkSession(r.Context())
-	if session == nil {
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil || authCtx.UserID == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -131,10 +156,11 @@ func (h *APIKeyHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Revoke only if key belongs to this org
-	err = h.queries.RevokeAPIKeyByOrg(r.Context(), db.RevokeAPIKeyByOrgParams{
-		ID:    pgtype.UUID{Bytes: id, Valid: true},
-		OrgID: pgtype.Text{String: session.OrgID, Valid: true},
+	// Revoke only if key belongs to this project
+	err = h.queries.RevokeAPIKeyByProject(r.Context(), db.RevokeAPIKeyByProjectParams{
+		ID:        pgtype.UUID{Bytes: id, Valid: true},
+		OrgID:     pgtype.Text{String: authCtx.OrgID, Valid: true},
+		ProjectID: authCtx.ProjectID,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to revoke API key"})

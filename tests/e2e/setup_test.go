@@ -244,15 +244,33 @@ func extractGooseUp(content string) string {
 	return content[start : start+downIdx]
 }
 
+const (
+	// TestOrgID is the organization ID used for testing
+	TestOrgID = "org_test"
+	// TestProjectID is the project ID used for testing
+	TestProjectID = "prj_test123456789012345678901"
+)
+
 func seedTestAPIKey(ctx context.Context, db *pgxpool.Pool) error {
+	// Create default project for test org
+	_, err := db.Exec(ctx, `
+		INSERT INTO projects (id, org_id, name, slug, created_at, updated_at)
+		VALUES ($1, $2, 'Default', 'default', NOW(), NOW())
+		ON CONFLICT (org_id, slug) DO NOTHING
+	`, TestProjectID, TestOrgID)
+	if err != nil {
+		return fmt.Errorf("failed to create test project: %w", err)
+	}
+
+	// Create API key linked to project
 	h := sha256.Sum256([]byte(TestAPIKey))
 	hash := hex.EncodeToString(h[:])
 
-	_, err := db.Exec(ctx, `
-		INSERT INTO api_keys (key_hash, key_prefix, name, org_id)
-		VALUES ($1, $2, $3, $4)
+	_, err = db.Exec(ctx, `
+		INSERT INTO api_keys (key_hash, key_prefix, name, org_id, project_id)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (key_hash) DO NOTHING
-	`, hash, "nsh_abcdefghi", "E2E Test Key", "org_test")
+	`, hash, "nsh_abcdefghi", "E2E Test Key", TestOrgID, TestProjectID)
 
 	return err
 }

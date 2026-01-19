@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { TopNav } from '../components/layout/TopNav'
 import { queryClient } from '../lib/query'
 import { isAnonymousMode } from '../lib/api'
+import { ProjectProvider } from '../lib/project-context'
 
 import appCss from '../styles.css?url'
 
@@ -68,17 +69,19 @@ function RootComponent() {
           <body>
             {isAnonymousMode ? (
               // Anonymous mode: bypass Clerk auth for local development
-              <>
+              <ProjectProvider>
                 <AppContent />
                 <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-warning text-warning-foreground text-xs font-medium">
                   Anonymous Mode
                 </div>
-              </>
+              </ProjectProvider>
             ) : (
               // Normal mode: require Clerk authentication
               <>
                 <SignedIn>
-                  <AppContent />
+                  <ProjectProvider>
+                    <AppContent />
+                  </ProjectProvider>
                 </SignedIn>
                 <SignedOut>
                   <div className="min-h-screen flex items-center justify-center bg-neutral-50">

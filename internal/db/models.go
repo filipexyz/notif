@@ -18,6 +18,7 @@ type ApiKey struct {
 	LastUsedAt         pgtype.Timestamptz `json:"last_used_at"`
 	RevokedAt          pgtype.Timestamptz `json:"revoked_at"`
 	OrgID              pgtype.Text        `json:"org_id"`
+	ProjectID          string             `json:"project_id"`
 }
 
 type ConsumerGroup struct {
@@ -35,6 +36,7 @@ type Event struct {
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	OrgID       string             `json:"org_id"`
+	ProjectID   pgtype.Text        `json:"project_id"`
 }
 
 type EventDelivery struct {
@@ -52,6 +54,15 @@ type EventDelivery struct {
 	Error        pgtype.Text        `json:"error"`
 }
 
+type Project struct {
+	ID        string             `json:"id"`
+	OrgID     string             `json:"org_id"`
+	Name      string             `json:"name"`
+	Slug      string             `json:"slug"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ScheduledEvent struct {
 	ID           string             `json:"id"`
 	OrgID        string             `json:"org_id"`
@@ -63,6 +74,7 @@ type ScheduledEvent struct {
 	Error        pgtype.Text        `json:"error"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	ExecutedAt   pgtype.Timestamptz `json:"executed_at"`
+	ProjectID    pgtype.Text        `json:"project_id"`
 }
 
 type Webhook struct {
@@ -75,6 +87,7 @@ type Webhook struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	OrgID     pgtype.Text        `json:"org_id"`
+	ProjectID pgtype.Text        `json:"project_id"`
 }
 
 type WebhookDelivery struct {

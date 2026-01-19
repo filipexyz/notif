@@ -32,9 +32,10 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	opts := nats.QueryOptions{
-		Topic: r.URL.Query().Get("topic"),
-		OrgID: authCtx.OrgID,
-		Limit: 100,
+		Topic:     r.URL.Query().Get("topic"),
+		OrgID:     authCtx.OrgID,
+		ProjectID: authCtx.ProjectID,
+		Limit:     100,
 	}
 
 	// Parse limit
@@ -104,8 +105,8 @@ func (h *EventsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify org ownership - critical security check
-	if event.Event.OrgID != authCtx.OrgID {
+	// Verify org and project ownership - critical security check
+	if event.Event.OrgID != authCtx.OrgID || event.Event.ProjectID != authCtx.ProjectID {
 		writeJSON(w, http.StatusNotFound, map[string]string{
 			"error": "event not found",
 		})

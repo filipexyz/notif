@@ -33,9 +33,25 @@ func (q *Queries) CountEventsByOrg(ctx context.Context, orgID string) (int64, er
 	return count, err
 }
 
+const countEventsByProject = `-- name: CountEventsByProject :one
+SELECT COUNT(*) FROM events WHERE org_id = $1 AND project_id = $2
+`
+
+type CountEventsByProjectParams struct {
+	OrgID     string      `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+}
+
+func (q *Queries) CountEventsByProject(ctx context.Context, arg CountEventsByProjectParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countEventsByProject, arg.OrgID, arg.ProjectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createEvent = `-- name: CreateEvent :exec
-INSERT INTO events (id, topic, api_key_id, org_id, payload_size, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO events (id, topic, api_key_id, org_id, project_id, payload_size, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateEventParams struct {
@@ -43,6 +59,7 @@ type CreateEventParams struct {
 	Topic       string             `json:"topic"`
 	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
 	OrgID       string             `json:"org_id"`
+	ProjectID   pgtype.Text        `json:"project_id"`
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
@@ -53,6 +70,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) error 
 		arg.Topic,
 		arg.ApiKeyID,
 		arg.OrgID,
+		arg.ProjectID,
 		arg.PayloadSize,
 		arg.CreatedAt,
 	)
@@ -60,7 +78,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) error 
 }
 
 const getEvent = `-- name: GetEvent :one
-SELECT id, topic, api_key_id, org_id, payload_size, created_at
+SELECT id, topic, api_key_id, org_id, project_id, payload_size, created_at
 FROM events
 WHERE id = $1
 `
@@ -70,6 +88,7 @@ type GetEventRow struct {
 	Topic       string             `json:"topic"`
 	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
 	OrgID       string             `json:"org_id"`
+	ProjectID   pgtype.Text        `json:"project_id"`
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
@@ -82,6 +101,7 @@ func (q *Queries) GetEvent(ctx context.Context, id string) (GetEventRow, error) 
 		&i.Topic,
 		&i.ApiKeyID,
 		&i.OrgID,
+		&i.ProjectID,
 		&i.PayloadSize,
 		&i.CreatedAt,
 	)
@@ -89,7 +109,7 @@ func (q *Queries) GetEvent(ctx context.Context, id string) (GetEventRow, error) 
 }
 
 const getEventByIDAndOrg = `-- name: GetEventByIDAndOrg :one
-SELECT id, topic, api_key_id, org_id, payload_size, created_at
+SELECT id, topic, api_key_id, org_id, project_id, payload_size, created_at
 FROM events
 WHERE id = $1 AND org_id = $2
 `
@@ -104,6 +124,7 @@ type GetEventByIDAndOrgRow struct {
 	Topic       string             `json:"topic"`
 	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
 	OrgID       string             `json:"org_id"`
+	ProjectID   pgtype.Text        `json:"project_id"`
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
@@ -116,6 +137,44 @@ func (q *Queries) GetEventByIDAndOrg(ctx context.Context, arg GetEventByIDAndOrg
 		&i.Topic,
 		&i.ApiKeyID,
 		&i.OrgID,
+		&i.ProjectID,
+		&i.PayloadSize,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getEventByIDAndProject = `-- name: GetEventByIDAndProject :one
+SELECT id, topic, api_key_id, org_id, project_id, payload_size, created_at
+FROM events
+WHERE id = $1 AND org_id = $2 AND project_id = $3
+`
+
+type GetEventByIDAndProjectParams struct {
+	ID        string      `json:"id"`
+	OrgID     string      `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+}
+
+type GetEventByIDAndProjectRow struct {
+	ID          string             `json:"id"`
+	Topic       string             `json:"topic"`
+	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
+	OrgID       string             `json:"org_id"`
+	ProjectID   pgtype.Text        `json:"project_id"`
+	PayloadSize int32              `json:"payload_size"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetEventByIDAndProject(ctx context.Context, arg GetEventByIDAndProjectParams) (GetEventByIDAndProjectRow, error) {
+	row := q.db.QueryRow(ctx, getEventByIDAndProject, arg.ID, arg.OrgID, arg.ProjectID)
+	var i GetEventByIDAndProjectRow
+	err := row.Scan(
+		&i.ID,
+		&i.Topic,
+		&i.ApiKeyID,
+		&i.OrgID,
+		&i.ProjectID,
 		&i.PayloadSize,
 		&i.CreatedAt,
 	)
@@ -144,8 +203,35 @@ func (q *Queries) GetEventStats(ctx context.Context, orgID string) (GetEventStat
 	return i, err
 }
 
+const getEventStatsByProject = `-- name: GetEventStatsByProject :one
+SELECT
+    COUNT(*) as total,
+    COUNT(CASE WHEN created_at > NOW() - INTERVAL '24 hours' THEN 1 END) as last_24h,
+    COUNT(CASE WHEN created_at > NOW() - INTERVAL '1 hour' THEN 1 END) as last_hour
+FROM events
+WHERE org_id = $1 AND project_id = $2
+`
+
+type GetEventStatsByProjectParams struct {
+	OrgID     string      `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+}
+
+type GetEventStatsByProjectRow struct {
+	Total    int64 `json:"total"`
+	Last24h  int64 `json:"last_24h"`
+	LastHour int64 `json:"last_hour"`
+}
+
+func (q *Queries) GetEventStatsByProject(ctx context.Context, arg GetEventStatsByProjectParams) (GetEventStatsByProjectRow, error) {
+	row := q.db.QueryRow(ctx, getEventStatsByProject, arg.OrgID, arg.ProjectID)
+	var i GetEventStatsByProjectRow
+	err := row.Scan(&i.Total, &i.Last24h, &i.LastHour)
+	return i, err
+}
+
 const listEventsByOrg = `-- name: ListEventsByOrg :many
-SELECT id, topic, api_key_id, org_id, payload_size, created_at
+SELECT id, topic, api_key_id, org_id, project_id, payload_size, created_at
 FROM events
 WHERE org_id = $1
 ORDER BY created_at DESC
@@ -162,6 +248,7 @@ type ListEventsByOrgRow struct {
 	Topic       string             `json:"topic"`
 	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
 	OrgID       string             `json:"org_id"`
+	ProjectID   pgtype.Text        `json:"project_id"`
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
@@ -180,6 +267,7 @@ func (q *Queries) ListEventsByOrg(ctx context.Context, arg ListEventsByOrgParams
 			&i.Topic,
 			&i.ApiKeyID,
 			&i.OrgID,
+			&i.ProjectID,
 			&i.PayloadSize,
 			&i.CreatedAt,
 		); err != nil {
@@ -194,7 +282,7 @@ func (q *Queries) ListEventsByOrg(ctx context.Context, arg ListEventsByOrgParams
 }
 
 const listEventsByOrgAndTopic = `-- name: ListEventsByOrgAndTopic :many
-SELECT id, topic, api_key_id, org_id, payload_size, created_at
+SELECT id, topic, api_key_id, org_id, project_id, payload_size, created_at
 FROM events
 WHERE org_id = $1 AND topic LIKE $2
 ORDER BY created_at DESC
@@ -212,6 +300,7 @@ type ListEventsByOrgAndTopicRow struct {
 	Topic       string             `json:"topic"`
 	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
 	OrgID       string             `json:"org_id"`
+	ProjectID   pgtype.Text        `json:"project_id"`
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
@@ -230,6 +319,117 @@ func (q *Queries) ListEventsByOrgAndTopic(ctx context.Context, arg ListEventsByO
 			&i.Topic,
 			&i.ApiKeyID,
 			&i.OrgID,
+			&i.ProjectID,
+			&i.PayloadSize,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEventsByProject = `-- name: ListEventsByProject :many
+SELECT id, topic, api_key_id, org_id, project_id, payload_size, created_at
+FROM events
+WHERE org_id = $1 AND project_id = $2
+ORDER BY created_at DESC
+LIMIT $3
+`
+
+type ListEventsByProjectParams struct {
+	OrgID     string      `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+	Limit     int32       `json:"limit"`
+}
+
+type ListEventsByProjectRow struct {
+	ID          string             `json:"id"`
+	Topic       string             `json:"topic"`
+	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
+	OrgID       string             `json:"org_id"`
+	ProjectID   pgtype.Text        `json:"project_id"`
+	PayloadSize int32              `json:"payload_size"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListEventsByProject(ctx context.Context, arg ListEventsByProjectParams) ([]ListEventsByProjectRow, error) {
+	rows, err := q.db.Query(ctx, listEventsByProject, arg.OrgID, arg.ProjectID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEventsByProjectRow{}
+	for rows.Next() {
+		var i ListEventsByProjectRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Topic,
+			&i.ApiKeyID,
+			&i.OrgID,
+			&i.ProjectID,
+			&i.PayloadSize,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEventsByProjectAndTopic = `-- name: ListEventsByProjectAndTopic :many
+SELECT id, topic, api_key_id, org_id, project_id, payload_size, created_at
+FROM events
+WHERE org_id = $1 AND project_id = $2 AND topic LIKE $3
+ORDER BY created_at DESC
+LIMIT $4
+`
+
+type ListEventsByProjectAndTopicParams struct {
+	OrgID     string      `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+	Topic     string      `json:"topic"`
+	Limit     int32       `json:"limit"`
+}
+
+type ListEventsByProjectAndTopicRow struct {
+	ID          string             `json:"id"`
+	Topic       string             `json:"topic"`
+	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
+	OrgID       string             `json:"org_id"`
+	ProjectID   pgtype.Text        `json:"project_id"`
+	PayloadSize int32              `json:"payload_size"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListEventsByProjectAndTopic(ctx context.Context, arg ListEventsByProjectAndTopicParams) ([]ListEventsByProjectAndTopicRow, error) {
+	rows, err := q.db.Query(ctx, listEventsByProjectAndTopic,
+		arg.OrgID,
+		arg.ProjectID,
+		arg.Topic,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEventsByProjectAndTopicRow{}
+	for rows.Next() {
+		var i ListEventsByProjectAndTopicRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Topic,
+			&i.ApiKeyID,
+			&i.OrgID,
+			&i.ProjectID,
 			&i.PayloadSize,
 			&i.CreatedAt,
 		); err != nil {
@@ -244,7 +444,7 @@ func (q *Queries) ListEventsByOrgAndTopic(ctx context.Context, arg ListEventsByO
 }
 
 const listEventsByTopicAndOrg = `-- name: ListEventsByTopicAndOrg :many
-SELECT id, topic, api_key_id, org_id, payload_size, created_at
+SELECT id, topic, api_key_id, org_id, project_id, payload_size, created_at
 FROM events
 WHERE topic LIKE $1 AND org_id = $2
 ORDER BY created_at DESC
@@ -262,6 +462,7 @@ type ListEventsByTopicAndOrgRow struct {
 	Topic       string             `json:"topic"`
 	ApiKeyID    pgtype.UUID        `json:"api_key_id"`
 	OrgID       string             `json:"org_id"`
+	ProjectID   pgtype.Text        `json:"project_id"`
 	PayloadSize int32              `json:"payload_size"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
@@ -280,6 +481,7 @@ func (q *Queries) ListEventsByTopicAndOrg(ctx context.Context, arg ListEventsByT
 			&i.Topic,
 			&i.ApiKeyID,
 			&i.OrgID,
+			&i.ProjectID,
 			&i.PayloadSize,
 			&i.CreatedAt,
 		); err != nil {

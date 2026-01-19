@@ -65,6 +65,7 @@ func (s *Server) routes() http.Handler {
 	apiKeyHandler := handler.NewAPIKeyHandler(queries)
 	statsHandler := handler.NewStatsHandler(queries, eventReader, dlqReader)
 	schedulesHandler := handler.NewSchedulesHandler(queries, s.schedulerWorker)
+	projectHandler := handler.NewProjectHandler(queries)
 
 	// WebSocket endpoint at root (no /api/v1 prefix for WS)
 	r.Group(func(r chi.Router) {
@@ -120,13 +121,21 @@ func (s *Server) routes() http.Handler {
 		r.Get("/stats/dlq", statsHandler.DLQ)
 		r.Get("/stats/schedules", schedulesHandler.Stats)
 
-		// API Keys (requires Clerk auth, not API key)
+		// Dashboard routes (requires Clerk auth, not API key)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireClerkAuth())
 
+			// API Keys
 			r.Post("/api-keys", apiKeyHandler.Create)
 			r.Get("/api-keys", apiKeyHandler.List)
 			r.Delete("/api-keys/{id}", apiKeyHandler.Revoke)
+
+			// Projects
+			r.Post("/projects", projectHandler.Create)
+			r.Get("/projects", projectHandler.List)
+			r.Get("/projects/{id}", projectHandler.Get)
+			r.Put("/projects/{id}", projectHandler.Update)
+			r.Delete("/projects/{id}", projectHandler.Delete)
 		})
 	})
 

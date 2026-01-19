@@ -56,11 +56,12 @@ func (h *EmitHandler) Emit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create event with org context
+	// Create event with org and project context
 	event := domain.NewEvent(req.Topic, req.Data)
 	authCtx := middleware.GetAuthContext(r.Context())
 	if authCtx != nil {
 		event.OrgID = authCtx.OrgID
+		event.ProjectID = authCtx.ProjectID
 	}
 
 	// Publish to NATS
@@ -79,6 +80,7 @@ func (h *EmitHandler) Emit(w http.ResponseWriter, r *http.Request) {
 			ID:          event.ID,
 			Topic:       event.Topic,
 			OrgID:       authCtx.OrgID,
+			ProjectID:   pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
 			PayloadSize: int32(len(req.Data)),
 			CreatedAt:   pgtype.Timestamptz{Time: event.Timestamp, Valid: true},
 		}

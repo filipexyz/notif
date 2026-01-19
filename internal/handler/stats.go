@@ -55,18 +55,21 @@ type APIKeysOverview struct {
 
 // Overview returns dashboard overview stats.
 func (h *StatsHandler) Overview(w http.ResponseWriter, r *http.Request) {
-	orgID := middleware.GetOrgIDFromContext(r.Context())
-	if orgID == "" {
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil || authCtx.OrgID == "" {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "org_id required"})
 		return
 	}
 
-	orgIDParam := pgtype.Text{String: orgID, Valid: true}
+	orgIDParam := pgtype.Text{String: authCtx.OrgID, Valid: true}
 
 	resp := OverviewResponse{}
 
-	// Events stats from database (org-scoped)
-	if count, err := h.queries.CountEventsByOrg(r.Context(), orgID); err == nil {
+	// Events stats from database (project-scoped)
+	if count, err := h.queries.CountEventsByProject(r.Context(), db.CountEventsByProjectParams{
+		OrgID:     authCtx.OrgID,
+		ProjectID: pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
+	}); err == nil {
 		resp.Events.Total = uint64(count)
 	}
 
@@ -83,8 +86,8 @@ func (h *StatsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// DLQ stats (org-scoped)
-	if dlqCount, err := h.dlqReader.Count(r.Context(), orgID); err == nil {
+	// DLQ stats (project-scoped)
+	if dlqCount, err := h.dlqReader.Count(r.Context(), authCtx.OrgID, authCtx.ProjectID); err == nil {
 		resp.DLQ.Pending = dlqCount
 	}
 
@@ -212,15 +215,15 @@ type DLQStatsResponse struct {
 	Total int64 `json:"total"`
 }
 
-// DLQ returns DLQ stats (org-scoped).
+// DLQ returns DLQ stats (project-scoped).
 func (h *StatsHandler) DLQ(w http.ResponseWriter, r *http.Request) {
-	orgID := middleware.GetOrgIDFromContext(r.Context())
-	if orgID == "" {
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil || authCtx.OrgID == "" {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "org_id required"})
 		return
 	}
 
-	count, err := h.dlqReader.Count(r.Context(), orgID)
+	count, err := h.dlqReader.Count(r.Context(), authCtx.OrgID, authCtx.ProjectID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get DLQ stats"})
 		return

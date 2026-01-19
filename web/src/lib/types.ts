@@ -1,3 +1,28 @@
+// Project
+export type Project = {
+  id: string
+  org_id: string
+  name: string
+  slug: string
+  created_at: string
+  updated_at: string
+}
+
+export type CreateProjectRequest = {
+  name: string
+  slug?: string
+}
+
+export type UpdateProjectRequest = {
+  name?: string
+  slug?: string
+}
+
+export type ProjectsResponse = {
+  projects: Project[]
+  count: number
+}
+
 // Event from backend (nested structure)
 export type StoredEvent = {
   seq: number
@@ -46,12 +71,15 @@ export type APIKey = {
   id: string
   name?: string
   key_prefix: string
+  project_id: string
+  project_name?: string
   created_at: string
   last_used_at?: string
 }
 
 export type CreateAPIKeyRequest = {
   name: string
+  project_id: string
 }
 
 export type CreateAPIKeyResponse = {
@@ -59,6 +87,7 @@ export type CreateAPIKeyResponse = {
   name?: string
   full_key: string // Full key, only returned on creation
   key_prefix: string
+  project_id: string
   created_at: string
 }
 

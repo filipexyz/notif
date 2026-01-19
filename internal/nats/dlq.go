@@ -13,6 +13,7 @@ import (
 type DLQMessage struct {
 	ID            string          `json:"id"`
 	OrgID         string          `json:"org_id"`
+	ProjectID     string          `json:"project_id"`
 	OriginalTopic string          `json:"original_topic"`
 	Data          json.RawMessage `json:"data"`
 	Timestamp     time.Time       `json:"timestamp"`
@@ -34,9 +35,12 @@ func NewDLQPublisher(js jetstream.JetStream) *DLQPublisher {
 
 // Publish sends a failed message to the DLQ.
 func (p *DLQPublisher) Publish(ctx context.Context, msg *DLQMessage) error {
-	// OrgID is required for multi-tenant isolation
+	// OrgID and ProjectID are required for multi-tenant isolation
 	if msg.OrgID == "" {
 		return fmt.Errorf("org_id is required for DLQ messages")
+	}
+	if msg.ProjectID == "" {
+		return fmt.Errorf("project_id is required for DLQ messages")
 	}
 
 	data, err := json.Marshal(msg)
@@ -44,8 +48,8 @@ func (p *DLQPublisher) Publish(ctx context.Context, msg *DLQMessage) error {
 		return fmt.Errorf("marshal DLQ message: %w", err)
 	}
 
-	// Subject format: dlq.{org_id}.<original_topic>
-	subject := "dlq." + msg.OrgID + "." + msg.OriginalTopic
+	// Subject format: dlq.{org_id}.{project_id}.<original_topic>
+	subject := "dlq." + msg.OrgID + "." + msg.ProjectID + "." + msg.OriginalTopic
 
 	_, err = p.js.Publish(ctx, subject, data)
 	if err != nil {
@@ -77,24 +81,27 @@ type DLQEntry struct {
 	Message *DLQMessage `json:"message"`
 }
 
-// List returns messages from the DLQ, filtered by org and optionally by topic.
-func (r *DLQReader) List(ctx context.Context, orgID, topic string, limit int) ([]DLQEntry, error) {
+// List returns messages from the DLQ, filtered by org, project, and optionally by topic.
+func (r *DLQReader) List(ctx context.Context, orgID, projectID, topic string, limit int) ([]DLQEntry, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 
-	// OrgID is required for multi-tenant isolation
+	// OrgID and ProjectID are required for multi-tenant isolation
 	if orgID == "" {
 		return nil, fmt.Errorf("org_id is required for DLQ queries")
 	}
+	if projectID == "" {
+		return nil, fmt.Errorf("project_id is required for DLQ queries")
+	}
 
-	// Create ephemeral consumer to read messages with org filtering
-	// Subject format: dlq.{org_id}.{topic}
+	// Create ephemeral consumer to read messages with org and project filtering
+	// Subject format: dlq.{org_id}.{project_id}.{topic}
 	var filterSubject string
 	if topic != "" {
-		filterSubject = "dlq." + orgID + "." + topic
+		filterSubject = "dlq." + orgID + "." + projectID + "." + topic
 	} else {
-		filterSubject = "dlq." + orgID + ".>"
+		filterSubject = "dlq." + orgID + "." + projectID + ".>"
 	}
 
 	consumer, err := r.stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
@@ -160,14 +167,17 @@ func (r *DLQReader) Delete(ctx context.Context, seq uint64) error {
 	return r.stream.DeleteMsg(ctx, seq)
 }
 
-// Count returns the total number of messages in the DLQ for a specific org.
-func (r *DLQReader) Count(ctx context.Context, orgID string) (int64, error) {
+// Count returns the total number of messages in the DLQ for a specific org and project.
+func (r *DLQReader) Count(ctx context.Context, orgID, projectID string) (int64, error) {
 	if orgID == "" {
 		return 0, fmt.Errorf("org_id is required for DLQ count")
 	}
+	if projectID == "" {
+		return 0, fmt.Errorf("project_id is required for DLQ count")
+	}
 
-	// Create ephemeral consumer to count messages for this org
-	filterSubject := "dlq." + orgID + ".>"
+	// Create ephemeral consumer to count messages for this org and project
+	filterSubject := "dlq." + orgID + "." + projectID + ".>"
 
 	consumer, err := r.stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 		FilterSubject: filterSubject,
@@ -193,15 +203,19 @@ func (r *DLQReader) Replay(ctx context.Context, seq uint64, publisher *Publisher
 		return err
 	}
 
-	// OrgID is required for multi-tenant isolation
+	// OrgID and ProjectID are required for multi-tenant isolation
 	if entry.Message.OrgID == "" {
 		return fmt.Errorf("org_id is required for replay")
 	}
+	if entry.Message.ProjectID == "" {
+		return fmt.Errorf("project_id is required for replay")
+	}
 
-	// Republish to original topic with org isolation
+	// Republish to original topic with org and project isolation
 	event := struct {
 		ID        string          `json:"id"`
 		OrgID     string          `json:"org_id"`
+		ProjectID string          `json:"project_id"`
 		Topic     string          `json:"topic"`
 		Data      json.RawMessage `json:"data"`
 		Timestamp time.Time       `json:"timestamp"`
@@ -209,6 +223,7 @@ func (r *DLQReader) Replay(ctx context.Context, seq uint64, publisher *Publisher
 	}{
 		ID:        entry.Message.ID,
 		OrgID:     entry.Message.OrgID,
+		ProjectID: entry.Message.ProjectID,
 		Topic:     entry.Message.OriginalTopic,
 		Data:      entry.Message.Data,
 		Timestamp: entry.Message.Timestamp,
@@ -220,8 +235,8 @@ func (r *DLQReader) Replay(ctx context.Context, seq uint64, publisher *Publisher
 		return fmt.Errorf("marshal event: %w", err)
 	}
 
-	// Subject format: events.{org_id}.{topic}
-	subject := "events." + entry.Message.OrgID + "." + entry.Message.OriginalTopic
+	// Subject format: events.{org_id}.{project_id}.{topic}
+	subject := "events." + entry.Message.OrgID + "." + entry.Message.ProjectID + "." + entry.Message.OriginalTopic
 	_, err = r.js.Publish(ctx, subject, data)
 	if err != nil {
 		return fmt.Errorf("republish event: %w", err)

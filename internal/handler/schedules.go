@@ -119,6 +119,7 @@ func (h *SchedulesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	sch, err := h.queries.CreateScheduledEvent(r.Context(), db.CreateScheduledEventParams{
 		ID:           id,
 		OrgID:        authCtx.OrgID,
+		ProjectID:    pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
 		Topic:        req.Topic,
 		Data:         req.Data,
 		ScheduledFor: pgtype.Timestamptz{Time: scheduledFor, Valid: true},
@@ -172,17 +173,19 @@ func (h *SchedulesHandler) List(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if status != "" {
-		schedules, err = h.queries.ListScheduledEventsByStatus(r.Context(), db.ListScheduledEventsByStatusParams{
-			OrgID:  authCtx.OrgID,
-			Status: status,
-			Limit:  int32(limit),
-			Offset: int32(offset),
+		schedules, err = h.queries.ListScheduledEventsByProjectAndStatus(r.Context(), db.ListScheduledEventsByProjectAndStatusParams{
+			OrgID:     authCtx.OrgID,
+			ProjectID: pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
+			Status:    status,
+			Limit:     int32(limit),
+			Offset:    int32(offset),
 		})
 	} else {
-		schedules, err = h.queries.ListScheduledEvents(r.Context(), db.ListScheduledEventsParams{
-			OrgID:  authCtx.OrgID,
-			Limit:  int32(limit),
-			Offset: int32(offset),
+		schedules, err = h.queries.ListScheduledEventsByProject(r.Context(), db.ListScheduledEventsByProjectParams{
+			OrgID:     authCtx.OrgID,
+			ProjectID: pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
+			Limit:     int32(limit),
+			Offset:    int32(offset),
 		})
 	}
 
@@ -218,9 +221,10 @@ func (h *SchedulesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sch, err := h.queries.GetScheduledEvent(r.Context(), db.GetScheduledEventParams{
-		ID:    id,
-		OrgID: authCtx.OrgID,
+	sch, err := h.queries.GetScheduledEventByProject(r.Context(), db.GetScheduledEventByProjectParams{
+		ID:        id,
+		OrgID:     authCtx.OrgID,
+		ProjectID: pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
 	})
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "scheduled event not found"})
@@ -244,9 +248,10 @@ func (h *SchedulesHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rowsAffected, err := h.queries.CancelScheduledEvent(r.Context(), db.CancelScheduledEventParams{
-		ID:    id,
-		OrgID: authCtx.OrgID,
+	rowsAffected, err := h.queries.CancelScheduledEventByProject(r.Context(), db.CancelScheduledEventByProjectParams{
+		ID:        id,
+		OrgID:     authCtx.OrgID,
+		ProjectID: pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
 	})
 	if err != nil {
 		slog.Error("failed to cancel scheduled event", "error", err, "id", id)
@@ -299,7 +304,10 @@ func (h *SchedulesHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	counts, err := h.queries.CountScheduledEventsByStatus(r.Context(), authCtx.OrgID)
+	counts, err := h.queries.CountScheduledEventsByProjectStatus(r.Context(), db.CountScheduledEventsByProjectStatusParams{
+		OrgID:     authCtx.OrgID,
+		ProjectID: pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
+	})
 	if err != nil {
 		slog.Error("failed to get schedule stats", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get schedule stats"})
