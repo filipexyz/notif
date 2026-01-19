@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import type { Project } from './types'
 
 const PROJECT_STORAGE_KEY = 'notif_selected_project'
@@ -29,21 +28,23 @@ const ProjectContext = createContext<ProjectContextType | null>(null)
 export function ProjectProvider({ children }: { children: ReactNode }) {
   // Initialize synchronously from localStorage to avoid race condition
   const [selectedProject, setSelectedProjectState] = useState<Project | null>(getStoredProject)
-  const queryClient = useQueryClient()
 
   const setSelectedProject = useCallback((project: Project | null) => {
-    setSelectedProjectState(project)
+    const currentId = getStoredProject()?.id
+
     if (project) {
       localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project))
     } else {
       localStorage.removeItem(PROJECT_STORAGE_KEY)
     }
-    // Invalidate all queries to refetch with new project context
-    // Exclude 'projects' query since that's org-level, not project-level
-    queryClient.invalidateQueries({
-      predicate: (query) => query.queryKey[0] !== 'projects',
-    })
-  }, [queryClient])
+
+    // If project actually changed, do a full page refresh to reset all state
+    if (project?.id !== currentId) {
+      window.location.reload()
+    } else {
+      setSelectedProjectState(project)
+    }
+  }, [])
 
   return (
     <ProjectContext.Provider
