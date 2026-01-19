@@ -66,10 +66,10 @@ function SettingsPage() {
 function APIKeysSection() {
   const api = useApi()
   const queryClient = useQueryClient()
+  const { selectedProject } = useProject()
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newKeyName, setNewKeyName] = useState('')
-  const [selectedProjectId, setSelectedProjectId] = useState('')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
 
@@ -78,20 +78,7 @@ function APIKeysSection() {
     queryFn: () => api<{ api_keys: APIKey[]; count: number }>('/api/v1/api-keys'),
   })
 
-  const { data: projectsData } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api<ProjectsResponse>('/api/v1/projects'),
-  })
-
   const apiKeys = apiKeysResponse?.api_keys ?? []
-  const projects = projectsData?.projects ?? []
-
-  // Set default project
-  useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].id)
-    }
-  }, [projects, selectedProjectId])
 
   const createKeyMutation = useMutation({
     mutationFn: ({ name, project_id }: { name: string; project_id: string }) =>
@@ -116,13 +103,13 @@ function APIKeysSection() {
   })
 
   const handleCreateKey = () => {
-    if (!selectedProjectId) {
-      alert('Please select a project')
+    if (!selectedProject) {
+      alert('Please select a project first')
       return
     }
     createKeyMutation.mutate({
       name: newKeyName || 'Untitled Key',
-      project_id: selectedProjectId,
+      project_id: selectedProject.id,
     })
   }
 
@@ -267,23 +254,11 @@ function APIKeysSection() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Project</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-neutral-200 bg-white"
-                >
-                  {projects.length === 0 ? (
-                    <option value="">No projects available</option>
-                  ) : (
-                    projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
-                    ))
-                  )}
-                </select>
+                <div className="px-3 py-2 text-sm border border-neutral-200 bg-neutral-50 text-neutral-700">
+                  {selectedProject?.name || 'No project selected'}
+                </div>
                 <p className="mt-1 text-xs text-neutral-500">
-                  The API key will only have access to this project's data.
+                  The API key will be scoped to the currently selected project.
                 </p>
               </div>
             </div>
@@ -293,7 +268,7 @@ function APIKeysSection() {
               </div>
             )}
             <div className="flex gap-2 mt-6">
-              <Button onClick={handleCreateKey} disabled={createKeyMutation.isPending || !selectedProjectId}>
+              <Button onClick={handleCreateKey} disabled={createKeyMutation.isPending || !selectedProject}>
                 {createKeyMutation.isPending ? 'Creating...' : 'Create'}
               </Button>
               <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
