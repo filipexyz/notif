@@ -12,21 +12,23 @@ import (
 )
 
 const createWebhook = `-- name: CreateWebhook :one
-INSERT INTO webhooks (org_id, url, topics, secret)
-VALUES ($1, $2, $3, $4)
-RETURNING id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id
+INSERT INTO webhooks (org_id, project_id, url, topics, secret)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id, project_id
 `
 
 type CreateWebhookParams struct {
-	OrgID  pgtype.Text `json:"org_id"`
-	Url    string      `json:"url"`
-	Topics []string    `json:"topics"`
-	Secret string      `json:"secret"`
+	OrgID     pgtype.Text `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+	Url       string      `json:"url"`
+	Topics    []string    `json:"topics"`
+	Secret    string      `json:"secret"`
 }
 
 func (q *Queries) CreateWebhook(ctx context.Context, arg CreateWebhookParams) (Webhook, error) {
 	row := q.db.QueryRow(ctx, createWebhook,
 		arg.OrgID,
+		arg.ProjectID,
 		arg.Url,
 		arg.Topics,
 		arg.Secret,
@@ -42,6 +44,7 @@ func (q *Queries) CreateWebhook(ctx context.Context, arg CreateWebhookParams) (W
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.OrgID,
+		&i.ProjectID,
 	)
 	return i, err
 }
@@ -83,6 +86,35 @@ DELETE FROM webhooks WHERE id = $1
 
 func (q *Queries) DeleteWebhook(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteWebhook, id)
+	return err
+}
+
+const deleteWebhookByOrg = `-- name: DeleteWebhookByOrg :exec
+DELETE FROM webhooks WHERE id = $1 AND org_id = $2
+`
+
+type DeleteWebhookByOrgParams struct {
+	ID    pgtype.UUID `json:"id"`
+	OrgID pgtype.Text `json:"org_id"`
+}
+
+func (q *Queries) DeleteWebhookByOrg(ctx context.Context, arg DeleteWebhookByOrgParams) error {
+	_, err := q.db.Exec(ctx, deleteWebhookByOrg, arg.ID, arg.OrgID)
+	return err
+}
+
+const deleteWebhookByProject = `-- name: DeleteWebhookByProject :exec
+DELETE FROM webhooks WHERE id = $1 AND org_id = $2 AND project_id = $3
+`
+
+type DeleteWebhookByProjectParams struct {
+	ID        pgtype.UUID `json:"id"`
+	OrgID     pgtype.Text `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+}
+
+func (q *Queries) DeleteWebhookByProject(ctx context.Context, arg DeleteWebhookByProjectParams) error {
+	_, err := q.db.Exec(ctx, deleteWebhookByProject, arg.ID, arg.OrgID, arg.ProjectID)
 	return err
 }
 
@@ -143,7 +175,7 @@ func (q *Queries) GetDeliveriesByEventID(ctx context.Context, eventID string) ([
 }
 
 const getEnabledWebhooks = `-- name: GetEnabledWebhooks :many
-SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id, project_id FROM webhooks
 WHERE enabled = true
 ORDER BY created_at
 `
@@ -167,6 +199,7 @@ func (q *Queries) GetEnabledWebhooks(ctx context.Context) ([]Webhook, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.OrgID,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -179,7 +212,7 @@ func (q *Queries) GetEnabledWebhooks(ctx context.Context) ([]Webhook, error) {
 }
 
 const getEnabledWebhooksByOrg = `-- name: GetEnabledWebhooksByOrg :many
-SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id, project_id FROM webhooks
 WHERE org_id = $1 AND enabled = true
 ORDER BY created_at DESC
 `
@@ -203,6 +236,49 @@ func (q *Queries) GetEnabledWebhooksByOrg(ctx context.Context, orgID pgtype.Text
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.OrgID,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getEnabledWebhooksByProject = `-- name: GetEnabledWebhooksByProject :many
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id, project_id FROM webhooks
+WHERE org_id = $1 AND project_id = $2 AND enabled = true
+ORDER BY created_at DESC
+`
+
+type GetEnabledWebhooksByProjectParams struct {
+	OrgID     pgtype.Text `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+}
+
+func (q *Queries) GetEnabledWebhooksByProject(ctx context.Context, arg GetEnabledWebhooksByProjectParams) ([]Webhook, error) {
+	rows, err := q.db.Query(ctx, getEnabledWebhooksByProject, arg.OrgID, arg.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Webhook{}
+	for rows.Next() {
+		var i Webhook
+		if err := rows.Scan(
+			&i.ID,
+			&i.ApiKeyID,
+			&i.Url,
+			&i.Topics,
+			&i.Secret,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OrgID,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -274,7 +350,7 @@ func (q *Queries) GetPendingDeliveries(ctx context.Context, limit int32) ([]GetP
 }
 
 const getWebhook = `-- name: GetWebhook :one
-SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks WHERE id = $1
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id, project_id FROM webhooks WHERE id = $1
 `
 
 func (q *Queries) GetWebhook(ctx context.Context, id pgtype.UUID) (Webhook, error) {
@@ -290,6 +366,34 @@ func (q *Queries) GetWebhook(ctx context.Context, id pgtype.UUID) (Webhook, erro
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.OrgID,
+		&i.ProjectID,
+	)
+	return i, err
+}
+
+const getWebhookByIdAndOrg = `-- name: GetWebhookByIdAndOrg :one
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id, project_id FROM webhooks WHERE id = $1 AND org_id = $2
+`
+
+type GetWebhookByIdAndOrgParams struct {
+	ID    pgtype.UUID `json:"id"`
+	OrgID pgtype.Text `json:"org_id"`
+}
+
+func (q *Queries) GetWebhookByIdAndOrg(ctx context.Context, arg GetWebhookByIdAndOrgParams) (Webhook, error) {
+	row := q.db.QueryRow(ctx, getWebhookByIdAndOrg, arg.ID, arg.OrgID)
+	var i Webhook
+	err := row.Scan(
+		&i.ID,
+		&i.ApiKeyID,
+		&i.Url,
+		&i.Topics,
+		&i.Secret,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OrgID,
+		&i.ProjectID,
 	)
 	return i, err
 }
@@ -339,7 +443,7 @@ func (q *Queries) GetWebhookDeliveries(ctx context.Context, arg GetWebhookDelive
 }
 
 const getWebhooksByAPIKey = `-- name: GetWebhooksByAPIKey :many
-SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id, project_id FROM webhooks
 WHERE api_key_id = $1
 ORDER BY created_at DESC
 `
@@ -363,6 +467,7 @@ func (q *Queries) GetWebhooksByAPIKey(ctx context.Context, apiKeyID pgtype.UUID)
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.OrgID,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -375,7 +480,7 @@ func (q *Queries) GetWebhooksByAPIKey(ctx context.Context, apiKeyID pgtype.UUID)
 }
 
 const getWebhooksByOrg = `-- name: GetWebhooksByOrg :many
-SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id FROM webhooks
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id, project_id FROM webhooks
 WHERE org_id = $1
 ORDER BY created_at DESC
 `
@@ -399,6 +504,49 @@ func (q *Queries) GetWebhooksByOrg(ctx context.Context, orgID pgtype.Text) ([]We
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.OrgID,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getWebhooksByProject = `-- name: GetWebhooksByProject :many
+SELECT id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id, project_id FROM webhooks
+WHERE org_id = $1 AND project_id = $2
+ORDER BY created_at DESC
+`
+
+type GetWebhooksByProjectParams struct {
+	OrgID     pgtype.Text `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+}
+
+func (q *Queries) GetWebhooksByProject(ctx context.Context, arg GetWebhooksByProjectParams) ([]Webhook, error) {
+	rows, err := q.db.Query(ctx, getWebhooksByProject, arg.OrgID, arg.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Webhook{}
+	for rows.Next() {
+		var i Webhook
+		if err := rows.Scan(
+			&i.ID,
+			&i.ApiKeyID,
+			&i.Url,
+			&i.Topics,
+			&i.Secret,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OrgID,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -414,7 +562,7 @@ const updateWebhook = `-- name: UpdateWebhook :one
 UPDATE webhooks
 SET url = $2, topics = $3, enabled = $4, updated_at = NOW()
 WHERE id = $1
-RETURNING id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id
+RETURNING id, api_key_id, url, topics, secret, enabled, created_at, updated_at, org_id, project_id
 `
 
 type UpdateWebhookParams struct {
@@ -442,6 +590,7 @@ func (q *Queries) UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) (W
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.OrgID,
+		&i.ProjectID,
 	)
 	return i, err
 }

@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { UserButton } from "@clerk/tanstack-react-start";
 import { Badge } from "../ui/Badge";
+import { ProjectSelector } from "./ProjectSelector";
 
 const navItems = [
   { href: "/", label: "Events" },
@@ -21,11 +22,18 @@ export function TopNav({ dlqCount = 0 }: TopNavProps) {
     <header className="h-12 border-b border-neutral-200 bg-white">
       <div className="h-full px-4 flex items-center justify-between">
         {/* Logo */}
-        <div className="flex items-center gap-8">
-          <Link to="/" className="text-lg font-semibold text-neutral-900">
-            notif.sh
-          </Link>
-          <Badge className="bg-primary-100 text-primary-700">beta</Badge>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            <Link to="/" className="text-lg font-semibold text-neutral-900">
+              notif.sh
+            </Link>
+            <Badge className="bg-primary-100 text-primary-700">beta</Badge>
+          </div>
+
+          {/* Project Selector */}
+          <div className="border-l border-neutral-200 pl-4">
+            <ProjectSelector />
+          </div>
 
           {/* Nav Links */}
           <nav className="flex items-center gap-1">

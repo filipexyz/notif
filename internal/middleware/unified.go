@@ -18,9 +18,10 @@ const authCtxKey authContextKey = "authContext"
 // AuthContext holds the authenticated user/key context.
 // Either APIKeyID or UserID will be set, not both.
 type AuthContext struct {
-	OrgID    string
-	APIKeyID *uuid.UUID // Set if authenticated via API key
-	UserID   *string    // Set if authenticated via Clerk
+	OrgID     string
+	ProjectID string     // Project ID - derived from API key or X-Project-ID header
+	APIKeyID  *uuid.UUID // Set if authenticated via API key
+	UserID    *string    // Set if authenticated via Clerk
 }
 
 // UnifiedAuth creates middleware that accepts both API key and Clerk auth.
@@ -37,11 +38,12 @@ func UnifiedAuth(queries *db.Queries) func(http.Handler) http.Handler {
 					keyHash := hashKey(token)
 					apiKey, err := queries.GetAPIKeyByHash(r.Context(), keyHash)
 					if err == nil {
-						// Valid API key
+						// Valid API key - derive project from API key
 						keyID := uuid.UUID(apiKey.ID.Bytes)
 						authCtx = &AuthContext{
-							OrgID:    apiKey.OrgID.String,
-							APIKeyID: &keyID,
+							OrgID:     apiKey.OrgID.String,
+							ProjectID: apiKey.ProjectID,
+							APIKeyID:  &keyID,
 						}
 
 						// Update last used (async)
@@ -71,9 +73,25 @@ func UnifiedAuth(queries *db.Queries) func(http.Handler) http.Handler {
 					orgID = claims.Subject // personal account uses user_xxx as org
 				}
 
+				// Get project from X-Project-ID header or use default
+				projectID := r.Header.Get("X-Project-ID")
+				if projectID == "" {
+					// Get or create default project for org
+					project, err := queries.GetOrCreateDefaultProject(r.Context(), db.GetOrCreateDefaultProjectParams{
+						ID:    domain.GenerateProjectID(),
+						OrgID: orgID,
+					})
+					if err != nil {
+						writeError(w, http.StatusInternalServerError, "failed to get default project")
+						return
+					}
+					projectID = project.ID
+				}
+
 				authCtx = &AuthContext{
-					OrgID:  orgID,
-					UserID: &userID,
+					OrgID:     orgID,
+					ProjectID: projectID,
+					UserID:    &userID,
 				}
 
 				// Store clerk session for handlers that need it
@@ -121,4 +139,13 @@ func GetOrgIDFromContext(ctx context.Context) string {
 		return ""
 	}
 	return authCtx.OrgID
+}
+
+// GetProjectIDFromContext retrieves the project ID from auth context.
+func GetProjectIDFromContext(ctx context.Context) string {
+	authCtx := GetAuthContext(ctx)
+	if authCtx == nil {
+		return ""
+	}
+	return authCtx.ProjectID
 }

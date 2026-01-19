@@ -13,6 +13,7 @@ type Event struct {
 	Data      json.RawMessage `json:"data"`
 	Timestamp time.Time       `json:"timestamp"`
 	OrgID     string          `json:"org_id,omitempty"`
+	ProjectID string          `json:"project_id,omitempty"`
 	Attempt   int             `json:"attempt,omitempty"`
 }
 

@@ -66,10 +66,11 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	secret := generateSecret()
 
 	webhook, err := h.queries.CreateWebhook(r.Context(), db.CreateWebhookParams{
-		OrgID:  pgtype.Text{String: authCtx.OrgID, Valid: true},
-		Url:    req.URL,
-		Topics: req.Topics,
-		Secret: secret,
+		OrgID:     pgtype.Text{String: authCtx.OrgID, Valid: true},
+		ProjectID: pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
+		Url:       req.URL,
+		Topics:    req.Topics,
+		Secret:    secret,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create webhook"})
@@ -86,7 +87,7 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// List lists all webhooks for the authenticated organization.
+// List lists all webhooks for the authenticated project.
 func (h *WebhookHandler) List(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
 	if authCtx == nil {
@@ -94,7 +95,10 @@ func (h *WebhookHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	webhooks, err := h.queries.GetWebhooksByOrg(r.Context(), pgtype.Text{String: authCtx.OrgID, Valid: true})
+	webhooks, err := h.queries.GetWebhooksByProject(r.Context(), db.GetWebhooksByProjectParams{
+		OrgID:     pgtype.Text{String: authCtx.OrgID, Valid: true},
+		ProjectID: pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list webhooks"})
 		return
@@ -133,7 +137,7 @@ func (h *WebhookHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
-	if err != nil || webhook.OrgID.String != authCtx.OrgID {
+	if err != nil || webhook.OrgID.String != authCtx.OrgID || webhook.ProjectID.String != authCtx.ProjectID {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
 		return
 	}
@@ -171,7 +175,7 @@ func (h *WebhookHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Get existing webhook
 	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
-	if err != nil || webhook.OrgID.String != authCtx.OrgID {
+	if err != nil || webhook.OrgID.String != authCtx.OrgID || webhook.ProjectID.String != authCtx.ProjectID {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
 		return
 	}
@@ -233,7 +237,7 @@ func (h *WebhookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// Get existing webhook to verify ownership
 	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
-	if err != nil || webhook.OrgID.String != authCtx.OrgID {
+	if err != nil || webhook.OrgID.String != authCtx.OrgID || webhook.ProjectID.String != authCtx.ProjectID {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
 		return
 	}
@@ -263,7 +267,7 @@ func (h *WebhookHandler) Deliveries(w http.ResponseWriter, r *http.Request) {
 
 	// Verify ownership
 	webhook, err := h.queries.GetWebhook(r.Context(), pgtype.UUID{Bytes: id, Valid: true})
-	if err != nil || webhook.OrgID.String != authCtx.OrgID {
+	if err != nil || webhook.OrgID.String != authCtx.OrgID || webhook.ProjectID.String != authCtx.ProjectID {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook not found"})
 		return
 	}

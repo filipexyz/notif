@@ -30,6 +30,60 @@ func (q *Queries) CancelScheduledEvent(ctx context.Context, arg CancelScheduledE
 	return result.RowsAffected(), nil
 }
 
+const cancelScheduledEventByProject = `-- name: CancelScheduledEventByProject :execrows
+UPDATE scheduled_events
+SET status = 'cancelled'
+WHERE id = $1 AND org_id = $2 AND project_id = $3 AND status = 'pending'
+`
+
+type CancelScheduledEventByProjectParams struct {
+	ID        string      `json:"id"`
+	OrgID     string      `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+}
+
+func (q *Queries) CancelScheduledEventByProject(ctx context.Context, arg CancelScheduledEventByProjectParams) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelScheduledEventByProject, arg.ID, arg.OrgID, arg.ProjectID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const countScheduledEventsByProjectStatus = `-- name: CountScheduledEventsByProjectStatus :one
+SELECT
+    COUNT(*) FILTER (WHERE status = 'pending') as pending,
+    COUNT(*) FILTER (WHERE status = 'completed') as completed,
+    COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled,
+    COUNT(*) FILTER (WHERE status = 'failed') as failed
+FROM scheduled_events
+WHERE org_id = $1 AND project_id = $2
+`
+
+type CountScheduledEventsByProjectStatusParams struct {
+	OrgID     string      `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+}
+
+type CountScheduledEventsByProjectStatusRow struct {
+	Pending   int64 `json:"pending"`
+	Completed int64 `json:"completed"`
+	Cancelled int64 `json:"cancelled"`
+	Failed    int64 `json:"failed"`
+}
+
+func (q *Queries) CountScheduledEventsByProjectStatus(ctx context.Context, arg CountScheduledEventsByProjectStatusParams) (CountScheduledEventsByProjectStatusRow, error) {
+	row := q.db.QueryRow(ctx, countScheduledEventsByProjectStatus, arg.OrgID, arg.ProjectID)
+	var i CountScheduledEventsByProjectStatusRow
+	err := row.Scan(
+		&i.Pending,
+		&i.Completed,
+		&i.Cancelled,
+		&i.Failed,
+	)
+	return i, err
+}
+
 const countScheduledEventsByStatus = `-- name: CountScheduledEventsByStatus :one
 SELECT
     COUNT(*) FILTER (WHERE status = 'pending') as pending,
@@ -60,14 +114,15 @@ func (q *Queries) CountScheduledEventsByStatus(ctx context.Context, orgID string
 }
 
 const createScheduledEvent = `-- name: CreateScheduledEvent :one
-INSERT INTO scheduled_events (id, org_id, topic, data, scheduled_for, api_key_id)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at
+INSERT INTO scheduled_events (id, org_id, project_id, topic, data, scheduled_for, api_key_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at, project_id
 `
 
 type CreateScheduledEventParams struct {
 	ID           string             `json:"id"`
 	OrgID        string             `json:"org_id"`
+	ProjectID    pgtype.Text        `json:"project_id"`
 	Topic        string             `json:"topic"`
 	Data         []byte             `json:"data"`
 	ScheduledFor pgtype.Timestamptz `json:"scheduled_for"`
@@ -78,6 +133,7 @@ func (q *Queries) CreateScheduledEvent(ctx context.Context, arg CreateScheduledE
 	row := q.db.QueryRow(ctx, createScheduledEvent,
 		arg.ID,
 		arg.OrgID,
+		arg.ProjectID,
 		arg.Topic,
 		arg.Data,
 		arg.ScheduledFor,
@@ -95,12 +151,13 @@ func (q *Queries) CreateScheduledEvent(ctx context.Context, arg CreateScheduledE
 		&i.Error,
 		&i.CreatedAt,
 		&i.ExecutedAt,
+		&i.ProjectID,
 	)
 	return i, err
 }
 
 const getPendingScheduledEvents = `-- name: GetPendingScheduledEvents :many
-SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at FROM scheduled_events
+SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at, project_id FROM scheduled_events
 WHERE scheduled_for <= NOW() AND status = 'pending'
 ORDER BY scheduled_for ASC
 LIMIT $1
@@ -127,6 +184,7 @@ func (q *Queries) GetPendingScheduledEvents(ctx context.Context, limit int32) ([
 			&i.Error,
 			&i.CreatedAt,
 			&i.ExecutedAt,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -139,7 +197,7 @@ func (q *Queries) GetPendingScheduledEvents(ctx context.Context, limit int32) ([
 }
 
 const getScheduledEvent = `-- name: GetScheduledEvent :one
-SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at FROM scheduled_events WHERE id = $1 AND org_id = $2
+SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at, project_id FROM scheduled_events WHERE id = $1 AND org_id = $2
 `
 
 type GetScheduledEventParams struct {
@@ -161,12 +219,42 @@ func (q *Queries) GetScheduledEvent(ctx context.Context, arg GetScheduledEventPa
 		&i.Error,
 		&i.CreatedAt,
 		&i.ExecutedAt,
+		&i.ProjectID,
+	)
+	return i, err
+}
+
+const getScheduledEventByProject = `-- name: GetScheduledEventByProject :one
+SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at, project_id FROM scheduled_events WHERE id = $1 AND org_id = $2 AND project_id = $3
+`
+
+type GetScheduledEventByProjectParams struct {
+	ID        string      `json:"id"`
+	OrgID     string      `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+}
+
+func (q *Queries) GetScheduledEventByProject(ctx context.Context, arg GetScheduledEventByProjectParams) (ScheduledEvent, error) {
+	row := q.db.QueryRow(ctx, getScheduledEventByProject, arg.ID, arg.OrgID, arg.ProjectID)
+	var i ScheduledEvent
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Topic,
+		&i.Data,
+		&i.ScheduledFor,
+		&i.Status,
+		&i.ApiKeyID,
+		&i.Error,
+		&i.CreatedAt,
+		&i.ExecutedAt,
+		&i.ProjectID,
 	)
 	return i, err
 }
 
 const getScheduledEventForExecution = `-- name: GetScheduledEventForExecution :one
-SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at FROM scheduled_events
+SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at, project_id FROM scheduled_events
 WHERE id = $1 AND org_id = $2 AND status = 'pending'
 FOR UPDATE SKIP LOCKED
 `
@@ -190,12 +278,13 @@ func (q *Queries) GetScheduledEventForExecution(ctx context.Context, arg GetSche
 		&i.Error,
 		&i.CreatedAt,
 		&i.ExecutedAt,
+		&i.ProjectID,
 	)
 	return i, err
 }
 
 const listScheduledEvents = `-- name: ListScheduledEvents :many
-SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at FROM scheduled_events
+SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at, project_id FROM scheduled_events
 WHERE org_id = $1
 ORDER BY scheduled_for DESC
 LIMIT $2 OFFSET $3
@@ -227,6 +316,111 @@ func (q *Queries) ListScheduledEvents(ctx context.Context, arg ListScheduledEven
 			&i.Error,
 			&i.CreatedAt,
 			&i.ExecutedAt,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listScheduledEventsByProject = `-- name: ListScheduledEventsByProject :many
+SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at, project_id FROM scheduled_events
+WHERE org_id = $1 AND project_id = $2
+ORDER BY scheduled_for DESC
+LIMIT $3 OFFSET $4
+`
+
+type ListScheduledEventsByProjectParams struct {
+	OrgID     string      `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+	Limit     int32       `json:"limit"`
+	Offset    int32       `json:"offset"`
+}
+
+func (q *Queries) ListScheduledEventsByProject(ctx context.Context, arg ListScheduledEventsByProjectParams) ([]ScheduledEvent, error) {
+	rows, err := q.db.Query(ctx, listScheduledEventsByProject,
+		arg.OrgID,
+		arg.ProjectID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ScheduledEvent{}
+	for rows.Next() {
+		var i ScheduledEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Topic,
+			&i.Data,
+			&i.ScheduledFor,
+			&i.Status,
+			&i.ApiKeyID,
+			&i.Error,
+			&i.CreatedAt,
+			&i.ExecutedAt,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listScheduledEventsByProjectAndStatus = `-- name: ListScheduledEventsByProjectAndStatus :many
+SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at, project_id FROM scheduled_events
+WHERE org_id = $1 AND project_id = $2 AND status = $3
+ORDER BY scheduled_for DESC
+LIMIT $4 OFFSET $5
+`
+
+type ListScheduledEventsByProjectAndStatusParams struct {
+	OrgID     string      `json:"org_id"`
+	ProjectID pgtype.Text `json:"project_id"`
+	Status    string      `json:"status"`
+	Limit     int32       `json:"limit"`
+	Offset    int32       `json:"offset"`
+}
+
+func (q *Queries) ListScheduledEventsByProjectAndStatus(ctx context.Context, arg ListScheduledEventsByProjectAndStatusParams) ([]ScheduledEvent, error) {
+	rows, err := q.db.Query(ctx, listScheduledEventsByProjectAndStatus,
+		arg.OrgID,
+		arg.ProjectID,
+		arg.Status,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ScheduledEvent{}
+	for rows.Next() {
+		var i ScheduledEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Topic,
+			&i.Data,
+			&i.ScheduledFor,
+			&i.Status,
+			&i.ApiKeyID,
+			&i.Error,
+			&i.CreatedAt,
+			&i.ExecutedAt,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -239,7 +433,7 @@ func (q *Queries) ListScheduledEvents(ctx context.Context, arg ListScheduledEven
 }
 
 const listScheduledEventsByStatus = `-- name: ListScheduledEventsByStatus :many
-SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at FROM scheduled_events
+SELECT id, org_id, topic, data, scheduled_for, status, api_key_id, error, created_at, executed_at, project_id FROM scheduled_events
 WHERE org_id = $1 AND status = $2
 ORDER BY scheduled_for DESC
 LIMIT $3 OFFSET $4
@@ -277,6 +471,7 @@ func (q *Queries) ListScheduledEventsByStatus(ctx context.Context, arg ListSched
 			&i.Error,
 			&i.CreatedAt,
 			&i.ExecutedAt,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}

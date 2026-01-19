@@ -24,7 +24,7 @@ func NewDLQHandler(reader *nats.DLQReader, publisher *nats.Publisher) *DLQHandle
 	}
 }
 
-// List returns messages from the DLQ (org-scoped).
+// List returns messages from the DLQ (project-scoped).
 func (h *DLQHandler) List(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
 	if authCtx == nil || authCtx.OrgID == "" {
@@ -42,7 +42,7 @@ func (h *DLQHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	entries, err := h.reader.List(r.Context(), authCtx.OrgID, topic, limit)
+	entries, err := h.reader.List(r.Context(), authCtx.OrgID, authCtx.ProjectID, topic, limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "failed to list DLQ: " + err.Error(),
@@ -70,7 +70,7 @@ func (h *DLQHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Get returns a specific DLQ message (with org verification).
+// Get returns a specific DLQ message (with org and project verification).
 func (h *DLQHandler) Get(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
 	if authCtx == nil || authCtx.OrgID == "" {
@@ -95,8 +95,8 @@ func (h *DLQHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify org ownership
-	if entry.Message.OrgID != authCtx.OrgID {
+	// Verify org and project ownership
+	if entry.Message.OrgID != authCtx.OrgID || entry.Message.ProjectID != authCtx.ProjectID {
 		writeJSON(w, http.StatusNotFound, map[string]string{
 			"error": "message not found",
 		})
@@ -106,7 +106,7 @@ func (h *DLQHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, entry)
 }
 
-// Replay republishes a DLQ message to its original topic (with org verification).
+// Replay republishes a DLQ message to its original topic (with org and project verification).
 func (h *DLQHandler) Replay(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
 	if authCtx == nil || authCtx.OrgID == "" {
@@ -123,7 +123,7 @@ func (h *DLQHandler) Replay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify org ownership before replay
+	// Verify org and project ownership before replay
 	entry, err := h.reader.Get(r.Context(), seq)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{
@@ -131,7 +131,7 @@ func (h *DLQHandler) Replay(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if entry.Message.OrgID != authCtx.OrgID {
+	if entry.Message.OrgID != authCtx.OrgID || entry.Message.ProjectID != authCtx.ProjectID {
 		writeJSON(w, http.StatusNotFound, map[string]string{
 			"error": "message not found",
 		})
@@ -150,7 +150,7 @@ func (h *DLQHandler) Replay(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Delete removes a message from the DLQ (with org verification).
+// Delete removes a message from the DLQ (with org and project verification).
 func (h *DLQHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
 	if authCtx == nil || authCtx.OrgID == "" {
@@ -167,7 +167,7 @@ func (h *DLQHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify org ownership before delete
+	// Verify org and project ownership before delete
 	entry, err := h.reader.Get(r.Context(), seq)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{
@@ -175,7 +175,7 @@ func (h *DLQHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if entry.Message.OrgID != authCtx.OrgID {
+	if entry.Message.OrgID != authCtx.OrgID || entry.Message.ProjectID != authCtx.ProjectID {
 		writeJSON(w, http.StatusNotFound, map[string]string{
 			"error": "message not found",
 		})
@@ -194,7 +194,7 @@ func (h *DLQHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ReplayAll replays all messages from the DLQ (org-scoped), optionally filtered by topic.
+// ReplayAll replays all messages from the DLQ (project-scoped), optionally filtered by topic.
 func (h *DLQHandler) ReplayAll(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
 	if authCtx == nil || authCtx.OrgID == "" {
@@ -204,7 +204,7 @@ func (h *DLQHandler) ReplayAll(w http.ResponseWriter, r *http.Request) {
 
 	topic := r.URL.Query().Get("topic")
 
-	entries, err := h.reader.List(r.Context(), authCtx.OrgID, topic, 1000)
+	entries, err := h.reader.List(r.Context(), authCtx.OrgID, authCtx.ProjectID, topic, 1000)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "failed to list DLQ: " + err.Error(),
@@ -228,7 +228,7 @@ func (h *DLQHandler) ReplayAll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Purge deletes all messages from the DLQ (org-scoped), optionally filtered by topic.
+// Purge deletes all messages from the DLQ (project-scoped), optionally filtered by topic.
 func (h *DLQHandler) Purge(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
 	if authCtx == nil || authCtx.OrgID == "" {
@@ -238,7 +238,7 @@ func (h *DLQHandler) Purge(w http.ResponseWriter, r *http.Request) {
 
 	topic := r.URL.Query().Get("topic")
 
-	entries, err := h.reader.List(r.Context(), authCtx.OrgID, topic, 1000)
+	entries, err := h.reader.List(r.Context(), authCtx.OrgID, authCtx.ProjectID, topic, 1000)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "failed to list DLQ: " + err.Error(),

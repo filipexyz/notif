@@ -1,10 +1,13 @@
 -- name: CreateWebhook :one
-INSERT INTO webhooks (org_id, url, topics, secret)
-VALUES ($1, $2, $3, $4)
+INSERT INTO webhooks (org_id, project_id, url, topics, secret)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: GetWebhook :one
 SELECT * FROM webhooks WHERE id = $1;
+
+-- name: GetWebhookByIdAndOrg :one
+SELECT * FROM webhooks WHERE id = $1 AND org_id = $2;
 
 -- name: GetWebhooksByAPIKey :many
 SELECT * FROM webhooks
@@ -16,9 +19,19 @@ SELECT * FROM webhooks
 WHERE org_id = $1
 ORDER BY created_at DESC;
 
+-- name: GetWebhooksByProject :many
+SELECT * FROM webhooks
+WHERE org_id = $1 AND project_id = $2
+ORDER BY created_at DESC;
+
 -- name: GetEnabledWebhooksByOrg :many
 SELECT * FROM webhooks
 WHERE org_id = $1 AND enabled = true
+ORDER BY created_at DESC;
+
+-- name: GetEnabledWebhooksByProject :many
+SELECT * FROM webhooks
+WHERE org_id = $1 AND project_id = $2 AND enabled = true
 ORDER BY created_at DESC;
 
 -- name: GetEnabledWebhooks :many
@@ -34,6 +47,12 @@ RETURNING *;
 
 -- name: DeleteWebhook :exec
 DELETE FROM webhooks WHERE id = $1;
+
+-- name: DeleteWebhookByOrg :exec
+DELETE FROM webhooks WHERE id = $1 AND org_id = $2;
+
+-- name: DeleteWebhookByProject :exec
+DELETE FROM webhooks WHERE id = $1 AND org_id = $2 AND project_id = $3;
 
 -- name: CreateWebhookDelivery :one
 INSERT INTO webhook_deliveries (webhook_id, event_id, topic, status)

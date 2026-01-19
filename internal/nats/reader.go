@@ -22,11 +22,12 @@ func NewEventReader(stream jetstream.Stream) *EventReader {
 
 // QueryOptions configures event queries.
 type QueryOptions struct {
-	Topic string
-	OrgID string    // Required: filter by organization
-	From  time.Time // Start time (inclusive)
-	To    time.Time // End time (exclusive), zero means now
-	Limit int
+	Topic     string
+	OrgID     string    // Required: filter by organization
+	ProjectID string    // Required: filter by project
+	From      time.Time // Start time (inclusive)
+	To        time.Time // End time (exclusive), zero means now
+	Limit     int
 }
 
 // StoredEvent represents an event with its stream metadata.
@@ -42,17 +43,20 @@ func (r *EventReader) Query(ctx context.Context, opts QueryOptions) ([]StoredEve
 		opts.Limit = 100
 	}
 
-	// OrgID is required for multi-tenant isolation
+	// OrgID and ProjectID are required for multi-tenant isolation
 	if opts.OrgID == "" {
 		return nil, fmt.Errorf("org_id is required for event queries")
 	}
+	if opts.ProjectID == "" {
+		return nil, fmt.Errorf("project_id is required for event queries")
+	}
 
-	// Build filter subject with org isolation: events.{org_id}.{topic}
+	// Build filter subject with org and project isolation: events.{org_id}.{project_id}.{topic}
 	var filterSubject string
 	if opts.Topic != "" {
-		filterSubject = "events." + opts.OrgID + "." + opts.Topic
+		filterSubject = "events." + opts.OrgID + "." + opts.ProjectID + "." + opts.Topic
 	} else {
-		filterSubject = "events." + opts.OrgID + ".>"
+		filterSubject = "events." + opts.OrgID + "." + opts.ProjectID + ".>"
 	}
 
 	// Create consumer config based on time range

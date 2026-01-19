@@ -16,6 +16,7 @@ import (
 type SubscriptionOptions struct {
 	Topics     []string
 	OrgID      string // Required: filter by organization
+	ProjectID  string // Required: filter by project
 	Group      string // Empty = ephemeral, non-empty = durable consumer group
 	AutoAck    bool
 	MaxRetries int
@@ -44,15 +45,18 @@ func NewConsumerManager(stream jetstream.Stream) *ConsumerManager {
 
 // CreateConsumer creates a JetStream consumer for the given options.
 func (cm *ConsumerManager) CreateConsumer(ctx context.Context, opts SubscriptionOptions) (jetstream.Consumer, error) {
-	// OrgID is required for multi-tenant isolation
+	// OrgID and ProjectID are required for multi-tenant isolation
 	if opts.OrgID == "" {
 		return nil, fmt.Errorf("org_id is required for subscriptions")
 	}
+	if opts.ProjectID == "" {
+		return nil, fmt.Errorf("project_id is required for subscriptions")
+	}
 
-	// Convert topics to NATS subjects with org isolation
-	// "leads.*" -> "events.{org_id}.leads.*"
-	// "agent.*.error" -> "events.{org_id}.agent.*.error"
-	// Special case: "*" -> "events.{org_id}.>" (match all topics)
+	// Convert topics to NATS subjects with org and project isolation
+	// "leads.*" -> "events.{org_id}.{project_id}.leads.*"
+	// "agent.*.error" -> "events.{org_id}.{project_id}.agent.*.error"
+	// Special case: "*" -> "events.{org_id}.{project_id}.>" (match all topics)
 	// In NATS, "*" matches exactly one token, while ">" matches one or more tokens.
 	// A standalone "*" subscription should match all topics, including multi-segment
 	// ones like "orders.created", so we convert it to ">" which is the NATS wildcard
@@ -61,9 +65,9 @@ func (cm *ConsumerManager) CreateConsumer(ctx context.Context, opts Subscription
 	for i, topic := range opts.Topics {
 		if topic == "*" {
 			// Standalone "*" means "all topics" - use ">" to match any depth
-			filterSubjects[i] = "events." + opts.OrgID + ".>"
+			filterSubjects[i] = "events." + opts.OrgID + "." + opts.ProjectID + ".>"
 		} else {
-			filterSubjects[i] = "events." + opts.OrgID + "." + topic
+			filterSubjects[i] = "events." + opts.OrgID + "." + opts.ProjectID + "." + topic
 		}
 	}
 

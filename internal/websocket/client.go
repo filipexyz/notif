@@ -32,13 +32,14 @@ const (
 
 // Client represents a WebSocket client connection.
 type Client struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	apiKeyID string
-	orgID    string     // Organization ID for multi-tenant isolation
-	clientID string     // Unique client identifier for tracking
-	queries  *db.Queries // For delivery tracking
+	hub       *Hub
+	conn      *websocket.Conn
+	send      chan []byte
+	apiKeyID  string
+	orgID     string      // Organization ID for multi-tenant isolation
+	projectID string      // Project ID for multi-tenant isolation
+	clientID  string      // Unique client identifier for tracking
+	queries   *db.Queries // For delivery tracking
 
 	// Subscription state
 	mu              sync.RWMutex
@@ -53,13 +54,14 @@ type Client struct {
 }
 
 // NewClient creates a new WebSocket client.
-func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, orgID string, dlqPublisher *nats.DLQPublisher, queries *db.Queries, clientID string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, orgID, projectID string, dlqPublisher *nats.DLQPublisher, queries *db.Queries, clientID string) *Client {
 	return &Client{
 		hub:             hub,
 		conn:            conn,
 		send:            make(chan []byte, 256),
 		apiKeyID:        apiKeyID,
 		orgID:           orgID,
+		projectID:       projectID,
 		clientID:        clientID,
 		queries:         queries,
 		pendingMessages: make(map[string]*pendingMsg),
@@ -172,9 +174,13 @@ func (c *Client) handleSubscribe(ctx context.Context, msg *SubscribeMessage, con
 		return
 	}
 
-	// OrgID is required for multi-tenant isolation
+	// OrgID and ProjectID are required for multi-tenant isolation
 	if c.orgID == "" {
 		c.sendError("UNAUTHORIZED", "org_id is required for subscriptions")
+		return
+	}
+	if c.projectID == "" {
+		c.sendError("UNAUTHORIZED", "project_id is required for subscriptions")
 		return
 	}
 
@@ -182,6 +188,7 @@ func (c *Client) handleSubscribe(ctx context.Context, msg *SubscribeMessage, con
 	opts := nats.DefaultSubscriptionOptions()
 	opts.Topics = msg.Topics
 	opts.OrgID = c.orgID
+	opts.ProjectID = c.projectID
 	opts.AutoAck = msg.Options.AutoAck
 	opts.Group = msg.Options.Group
 	opts.From = msg.Options.From
@@ -440,6 +447,7 @@ func (c *Client) moveToDLQ(pending *pendingMsg, group, reason string) {
 	dlqMsg := &nats.DLQMessage{
 		ID:            pending.event.ID,
 		OrgID:         c.orgID,
+		ProjectID:     c.projectID,
 		OriginalTopic: pending.event.Topic,
 		Data:          pending.event.Data,
 		Timestamp:     pending.event.Timestamp,
