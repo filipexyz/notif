@@ -31,7 +31,7 @@ func (s *Server) routes() http.Handler {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   s.cfg.CORSOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Project-ID"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
