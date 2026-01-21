@@ -218,23 +218,21 @@ Define JSON Schemas for your events and generate typed code.
 ### 1. Create a Schema
 
 ```bash
-# Create schema definition
-cat > order-placed.yaml << 'EOF'
-name: order-placed
-version: "1.0.0"
-topic: orders.placed
-schema:
-  type: object
-  required: [orderId, amount]
-  properties:
-    orderId:
-      type: string
-    amount:
-      type: number
-EOF
+# Create schema with JSON Schema from stdin
+echo '{
+  "type": "object",
+  "required": ["orderId", "amount"],
+  "properties": {
+    "orderId": {"type": "string"},
+    "amount": {"type": "number"}
+  }
+}' | notif schemas create order-placed --topic "orders.placed"
 
-# Push to server
-notif schemas push order-placed.yaml
+# Edit schema (reads from stdin, auto-bumps version)
+cat updated-schema.json | notif schemas edit order-placed
+
+# Pipe workflow: get -> modify -> update
+notif schemas get order-placed --schema | jq '.properties.currency = {"type": "string"}' | notif schemas edit order-placed
 ```
 
 ### 2. Generate Typed Code

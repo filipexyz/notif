@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -221,10 +223,20 @@ var schemasListCmd = &cobra.Command{
 	},
 }
 
+var (
+	getSchemaOnly bool
+)
+
 var schemasGetCmd = &cobra.Command{
 	Use:   "get <name>",
 	Short: "Get schema details",
-	Args:  cobra.ExactArgs(1),
+	Long: `Get schema details. Use --schema to output only the JSON Schema (for piping).
+
+Examples:
+  notif schemas get order-placed
+  notif schemas get order-placed --schema
+  notif schemas get order-placed --schema | jq '.properties'`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if cfg.APIKey == "" {
 			out.Error("No API key configured. Run 'notif auth <key>' first.")
@@ -235,6 +247,16 @@ var schemasGetCmd = &cobra.Command{
 		schema, err := c.SchemaGet(args[0])
 		if err != nil {
 			out.Error("Failed to get schema: %v", err)
+			return
+		}
+
+		// Output only JSON Schema for piping
+		if getSchemaOnly {
+			if schema.LatestVersion == nil {
+				out.Error("Schema has no versions")
+				return
+			}
+			fmt.Println(string(schema.LatestVersion.Schema))
 			return
 		}
 
@@ -617,6 +639,177 @@ Examples:
 	},
 }
 
+var (
+	createTopic       string
+	createVersion     string
+	createDescription string
+	editVersion       string
+)
+
+var schemasCreateCmd = &cobra.Command{
+	Use:   "create <name>",
+	Short: "Create a new schema with JSON Schema from stdin",
+	Long: `Create a new schema. Reads JSON Schema from stdin.
+
+Examples:
+  echo '{"type": "object", "properties": {"id": {"type": "string"}}}' | notif schemas create order-placed --topic "orders.placed"
+  cat schema.json | notif schemas create user-created --topic "users.*" --version 1.0.0`,
+	Args: cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		if cfg.APIKey == "" {
+			out.Error("No API key configured. Run 'notif auth <key>' first.")
+			return
+		}
+
+		if createTopic == "" {
+			out.Error("--topic is required")
+			return
+		}
+
+		// Read JSON Schema from stdin
+		schemaData, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			out.Error("Failed to read stdin: %v", err)
+			return
+		}
+
+		if len(schemaData) == 0 {
+			out.Error("No JSON Schema provided on stdin")
+			return
+		}
+
+		// Validate it's valid JSON
+		var schemaJSON json.RawMessage
+		if err := json.Unmarshal(schemaData, &schemaJSON); err != nil {
+			out.Error("Invalid JSON: %v", err)
+			return
+		}
+
+		c := getClient()
+
+		// Create schema
+		schema, err := c.SchemaCreate(client.CreateSchemaRequest{
+			Name:         args[0],
+			TopicPattern: createTopic,
+			Description:  createDescription,
+		})
+		if err != nil {
+			out.Error("Failed to create schema: %v", err)
+			return
+		}
+
+		// Create initial version
+		version := createVersion
+		if version == "" {
+			version = "1.0.0"
+		}
+
+		_, err = c.SchemaVersionCreate(args[0], client.CreateSchemaVersionRequest{
+			Version:        version,
+			Schema:         schemaJSON,
+			ValidationMode: "strict",
+			OnInvalid:      "reject",
+		})
+		if err != nil {
+			out.Error("Schema created but failed to create version: %v", err)
+			return
+		}
+
+		if jsonOutput {
+			out.JSON(schema)
+			return
+		}
+
+		out.Success("Created schema: %s (version %s)", args[0], version)
+	},
+}
+
+var schemasEditCmd = &cobra.Command{
+	Use:   "edit <name>",
+	Short: "Update schema with JSON Schema from stdin",
+	Long: `Update a schema with a new version. Reads JSON Schema from stdin.
+
+Examples:
+  cat schema.json | notif schemas edit order-placed
+  notif schemas get order-placed --schema | jq '.properties.amount.type = "integer"' | notif schemas edit order-placed
+  notif schemas edit order-placed --version 2.0.0 < schema.json`,
+	Args: cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		if cfg.APIKey == "" {
+			out.Error("No API key configured. Run 'notif auth <key>' first.")
+			return
+		}
+
+		// Read JSON Schema from stdin
+		schemaData, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			out.Error("Failed to read stdin: %v", err)
+			return
+		}
+
+		if len(schemaData) == 0 {
+			out.Error("No JSON Schema provided on stdin")
+			return
+		}
+
+		// Validate it's valid JSON
+		var schemaJSON json.RawMessage
+		if err := json.Unmarshal(schemaData, &schemaJSON); err != nil {
+			out.Error("Invalid JSON: %v", err)
+			return
+		}
+
+		c := getClient()
+
+		// Get current schema to determine next version
+		schema, err := c.SchemaGet(args[0])
+		if err != nil {
+			out.Error("Failed to get schema: %v", err)
+			return
+		}
+
+		// Determine version
+		version := editVersion
+		if version == "" {
+			if schema.LatestVersion != nil {
+				version = bumpPatchVersion(schema.LatestVersion.Version)
+			} else {
+				version = "1.0.0"
+			}
+		}
+
+		// Create new version
+		_, err = c.SchemaVersionCreate(args[0], client.CreateSchemaVersionRequest{
+			Version:        version,
+			Schema:         schemaJSON,
+			ValidationMode: "strict",
+			OnInvalid:      "reject",
+		})
+		if err != nil {
+			out.Error("Failed to create version: %v", err)
+			return
+		}
+
+		if jsonOutput {
+			out.JSON(map[string]string{"schema": args[0], "version": version})
+			return
+		}
+
+		out.Success("Updated schema: %s (version %s)", args[0], version)
+	},
+}
+
+// bumpPatchVersion increments the patch version (1.0.0 -> 1.0.1)
+func bumpPatchVersion(v string) string {
+	parts := strings.Split(v, ".")
+	if len(parts) != 3 {
+		return v + ".1"
+	}
+	var patch int
+	fmt.Sscanf(parts[2], "%d", &patch)
+	return fmt.Sprintf("%s.%s.%d", parts[0], parts[1], patch+1)
+}
+
 func init() {
 	schemasCmd.AddCommand(schemasPushCmd)
 	schemasCmd.AddCommand(schemasListCmd)
@@ -627,6 +820,20 @@ func init() {
 	schemasCmd.AddCommand(schemasForTopicCmd)
 	schemasCmd.AddCommand(schemasGenerateCmd)
 	schemasCmd.AddCommand(schemasInitCmd)
+	schemasCmd.AddCommand(schemasCreateCmd)
+	schemasCmd.AddCommand(schemasEditCmd)
+
+	// Get command flags
+	schemasGetCmd.Flags().BoolVar(&getSchemaOnly, "schema", false, "output only the JSON Schema (for piping)")
+
+	// Create command flags
+	schemasCreateCmd.Flags().StringVar(&createTopic, "topic", "", "topic pattern (required)")
+	schemasCreateCmd.Flags().StringVar(&createVersion, "version", "", "initial version (default 1.0.0)")
+	schemasCreateCmd.Flags().StringVar(&createDescription, "description", "", "schema description")
+	schemasCreateCmd.MarkFlagRequired("topic")
+
+	// Edit command flags
+	schemasEditCmd.Flags().StringVar(&editVersion, "version", "", "version number (default: auto-increment patch)")
 
 	// Generate command flags
 	schemasGenerateCmd.Flags().StringVarP(&generateConfigFile, "config", "c", "", "config file (default .notif.yaml)")

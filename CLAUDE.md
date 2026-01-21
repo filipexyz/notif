@@ -143,6 +143,40 @@ VITE_DEV_API_KEY=nsh_testkey1234567890abcdefghijk
 
 This allows testing the dashboard without signing in. Shows "Anonymous Mode" badge.
 
+## Schema Management
+
+Manage JSON Schemas via CLI with stdin/stdout for piping.
+
+### Create & Edit Schemas
+
+```bash
+# Create schema (JSON Schema from stdin)
+echo '{"type": "object", "properties": {"id": {"type": "string"}}}' | notif schemas create order-placed --topic "orders.placed"
+
+# Get schema JSON (for piping)
+notif schemas get order-placed --schema
+
+# Edit schema (JSON Schema from stdin, auto-bumps version)
+cat schema.json | notif schemas edit order-placed
+
+# Pipe workflow: get -> modify -> update
+notif schemas get order-placed --schema | jq '.properties.amount.type = "integer"' | notif schemas edit order-placed
+
+# Specify version explicitly
+notif schemas edit order-placed --version 2.0.0 < schema.json
+```
+
+### Other Commands
+
+```bash
+notif schemas list                    # List all schemas
+notif schemas get <name>              # Get schema details
+notif schemas get <name> --schema     # Output JSON Schema only
+notif schemas versions <name>         # List versions
+notif schemas validate <name> <data>  # Validate data
+notif schemas delete <name>           # Delete schema
+```
+
 ## Schema Codegen
 
 Generate typed code (TypeScript + Zod, Go structs) from notif.sh JSON Schemas.
