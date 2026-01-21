@@ -155,6 +155,7 @@ while let Some(event) = stream.next().await {
 | **Subscribe** | Real-time WebSocket with ack/nack |
 | **Webhooks** | HTTP delivery with HMAC signing |
 | **Scheduled Events** | Emit events at a future time (`--at`, `--in`) |
+| **Schema Validation** | JSON Schema validation with codegen |
 | **Auto-retry** | Exponential backoff with max retries |
 | **Dead Letter Queue** | Failed events preserved for replay |
 | **Consumer Groups** | Load-balance across instances |
@@ -208,6 +209,73 @@ while let Some(event) = stream.next().await {
         Err(_) => event.nack(Some("5m")).await?,
     }
 }
+```
+
+## Schema Validation & Codegen
+
+Define JSON Schemas for your events and generate typed code.
+
+### 1. Create a Schema
+
+```bash
+# Create schema definition
+cat > order-placed.yaml << 'EOF'
+name: order-placed
+version: "1.0.0"
+topic: orders.placed
+schema:
+  type: object
+  required: [orderId, amount]
+  properties:
+    orderId:
+      type: string
+    amount:
+      type: number
+EOF
+
+# Push to server
+notif schemas push order-placed.yaml
+```
+
+### 2. Generate Typed Code
+
+```bash
+# Initialize codegen config
+notif schemas init
+
+# Edit .notif.yaml to configure output paths and schemas
+# Then generate TypeScript + Go code:
+notif schemas generate
+```
+
+**.notif.yaml** configuration:
+```yaml
+version: 1
+output:
+  typescript: ./src/generated/notif
+  go: ./internal/notif/schemas
+schemas: all  # Or list specific: [order-placed, user-created]
+```
+
+### 3. Use Generated Types
+
+**TypeScript** (with Zod validation):
+```typescript
+import { OrderPlacedSchema, validateOrderPlaced } from './generated/notif'
+
+// Validate incoming event
+const order = validateOrderPlaced(event.data)
+
+// Type-safe access
+console.log(order.orderId, order.amount)
+```
+
+**Go**:
+```go
+import "myapp/internal/notif/schemas"
+
+var order schemas.OrderPlaced
+json.Unmarshal(event.Data, &order)
 ```
 
 ## REST API

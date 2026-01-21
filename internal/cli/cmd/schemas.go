@@ -3,8 +3,10 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/filipexyz/notif/internal/codegen"
 	"github.com/filipexyz/notif/pkg/client"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -438,6 +440,183 @@ var schemasForTopicCmd = &cobra.Command{
 	},
 }
 
+var (
+	generateConfigFile string
+	generateDryRun     bool
+	initAllSchemas     bool
+)
+
+var schemasGenerateCmd = &cobra.Command{
+	Use:   "generate [schema-name]",
+	Short: "Generate typed code from schemas",
+	Long: `Generate typed code (TypeScript/Go) from notif.sh JSON Schemas.
+
+Reads configuration from .notif.yaml and generates code for all configured schemas.
+Optionally specify a schema name to generate code for only that schema.
+
+Examples:
+  notif schemas generate                    # Generate all schemas
+  notif schemas generate order-placed       # Generate specific schema
+  notif schemas generate --dry-run          # Preview what would be generated
+  notif schemas generate -c custom.yaml     # Use custom config file`,
+	Args: cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		// Find or use specified config file
+		configPath := generateConfigFile
+		if configPath == "" {
+			var err error
+			configPath, err = codegen.FindConfig()
+			if err != nil {
+				out.Error("No .notif.yaml found. Run 'notif schemas init' to create one.")
+				return
+			}
+		}
+
+		// Load config
+		cfg, err := codegen.LoadConfig(configPath)
+		if err != nil {
+			out.Error("Failed to load config: %v", err)
+			return
+		}
+
+		// Get API key for fetching schemas from server
+		apiKey := os.Getenv("NOTIF_API_KEY")
+		if apiKey == "" {
+			// Check if all schemas are local files (or if using "schemas: all")
+			needsServer := cfg.Schemas.All
+			if !needsServer {
+				for _, s := range cfg.Schemas.Entries {
+					if s.File == "" {
+						needsServer = true
+						break
+					}
+				}
+			}
+			if needsServer {
+				out.Error("No API key configured. Set NOTIF_API_KEY or run 'notif auth <key>'.")
+				return
+			}
+		}
+
+		// Create client (may be nil if all schemas are local)
+		var c *client.Client
+		if apiKey != "" {
+			server := cfg.Server
+			if server == "" {
+				server = serverURL
+			}
+			c = client.New(apiKey, client.WithServer(server))
+		}
+
+		// Create generator
+		opts := []codegen.GeneratorOption{
+			codegen.WithDryRun(generateDryRun),
+			codegen.WithProgressCallback(func(msg string) {
+				out.Info(msg)
+			}),
+		}
+
+		gen := codegen.NewGenerator(cfg, c, configPath, opts...)
+
+		// Filter schema if specified
+		var filterSchema string
+		if len(args) > 0 {
+			filterSchema = args[0]
+		}
+
+		// Generate
+		results, err := gen.Generate(filterSchema)
+		if err != nil {
+			out.Error("Generation failed: %v", err)
+			return
+		}
+
+		if jsonOutput {
+			out.JSON(results)
+			return
+		}
+
+		// Summary
+		generated, failed, _ := codegen.CountResults(results)
+		out.Divider()
+		if generateDryRun {
+			out.Info("Dry run: would generate %d files", generated)
+		} else {
+			out.Success("Generated %d files", generated)
+		}
+		if failed > 0 {
+			out.Error("Failed: %d", failed)
+			for _, r := range results {
+				if r.Error != nil {
+					out.Error("  %s: %v", r.Schema, r.Error)
+				}
+			}
+		}
+	},
+}
+
+var schemasInitCmd = &cobra.Command{
+	Use:   "init",
+	Short: "Initialize schema codegen configuration",
+	Long: `Create a .notif.yaml configuration file for schema code generation.
+
+Examples:
+  notif schemas init          # Create config with example schema
+  notif schemas init --all    # Create config with all schemas from server`,
+	Run: func(cmd *cobra.Command, args []string) {
+		configPath := ".notif.yaml"
+
+		// Check if config already exists
+		if _, err := os.Stat(configPath); err == nil {
+			out.Error("Config file already exists: %s", configPath)
+			return
+		}
+
+		cfg := codegen.CreateDefaultConfig()
+
+		// If --all flag, fetch schemas from server
+		if initAllSchemas {
+			apiKey := os.Getenv("NOTIF_API_KEY")
+			if apiKey == "" {
+				out.Error("No API key configured. Set NOTIF_API_KEY to fetch schemas.")
+				return
+			}
+
+			c := getClient()
+			result, err := c.SchemaList()
+			if err != nil {
+				out.Error("Failed to list schemas: %v", err)
+				return
+			}
+
+			cfg.Schemas.Entries = nil
+			for _, s := range result.Schemas {
+				cfg.Schemas.Entries = append(cfg.Schemas.Entries, codegen.SchemaEntry{Name: s.Name})
+			}
+
+			if len(cfg.Schemas.Entries) == 0 {
+				out.Warn("No schemas found on server. Using example placeholder.")
+				cfg.Schemas.Entries = []codegen.SchemaEntry{{Name: "example-schema"}}
+			}
+		}
+
+		if err := codegen.WriteConfig(cfg, configPath); err != nil {
+			out.Error("Failed to write config: %v", err)
+			return
+		}
+
+		if jsonOutput {
+			out.JSON(map[string]string{"path": configPath})
+			return
+		}
+
+		absPath, _ := filepath.Abs(configPath)
+		out.Success("Created %s", absPath)
+		out.Info("Edit the file to configure your schemas, then run:")
+		out.Info("  notif schemas generate")
+	},
+}
+
 func init() {
 	schemasCmd.AddCommand(schemasPushCmd)
 	schemasCmd.AddCommand(schemasListCmd)
@@ -446,6 +625,15 @@ func init() {
 	schemasCmd.AddCommand(schemasValidateCmd)
 	schemasCmd.AddCommand(schemasVersionsCmd)
 	schemasCmd.AddCommand(schemasForTopicCmd)
+	schemasCmd.AddCommand(schemasGenerateCmd)
+	schemasCmd.AddCommand(schemasInitCmd)
+
+	// Generate command flags
+	schemasGenerateCmd.Flags().StringVarP(&generateConfigFile, "config", "c", "", "config file (default .notif.yaml)")
+	schemasGenerateCmd.Flags().BoolVar(&generateDryRun, "dry-run", false, "show what would be generated without writing files")
+
+	// Init command flags
+	schemasInitCmd.Flags().BoolVar(&initAllSchemas, "all", false, "include all schemas from server")
 
 	rootCmd.AddCommand(schemasCmd)
 }

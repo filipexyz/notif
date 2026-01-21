@@ -22,6 +22,7 @@ Managed pub/sub event hub with webhooks, DLQ, and real-time subscriptions.
 │   ├── nats/           # NATS JetStream (publisher, consumer, DLQ)
 │   ├── websocket/      # WebSocket hub
 │   ├── scheduler/      # Scheduled events worker
+│   ├── codegen/        # Schema codegen (TS/Go from JSON Schema)
 │   ├── db/             # sqlc generated code
 │   └── domain/         # Business logic
 ├── db/
@@ -141,6 +142,81 @@ VITE_DEV_API_KEY=nsh_testkey1234567890abcdefghijk
 ```
 
 This allows testing the dashboard without signing in. Shows "Anonymous Mode" badge.
+
+## Schema Codegen
+
+Generate typed code (TypeScript + Zod, Go structs) from notif.sh JSON Schemas.
+
+### Quick Start
+
+```bash
+# Initialize config
+notif schemas init
+
+# Generate code for all schemas
+notif schemas generate
+
+# Preview without writing
+notif schemas generate --dry-run
+```
+
+### Configuration (.notif.yaml)
+
+```yaml
+version: 1
+output:
+  typescript: ./src/generated/notif
+  go: ./internal/notif/schemas
+options:
+  typescript:
+    exports: named       # named | default
+  go:
+    package: schemas
+    jsonTags: omitempty  # omitempty | required | none
+
+# Generate ALL schemas from server
+schemas: all
+
+# Or list specific schemas
+schemas:
+  - order-placed
+  - name: user-created
+    languages: [typescript]  # Only TypeScript
+  - name: payment
+    file: ./schemas/payment.yaml  # From local file
+```
+
+### Generated Code
+
+**TypeScript** (with Zod validators):
+```typescript
+import { z } from 'zod';
+
+export const OrderPlacedSchema = z.object({
+  orderId: z.string(),
+  amount: z.number(),
+});
+
+export type OrderPlaced = z.infer<typeof OrderPlacedSchema>;
+
+export function validateOrderPlaced(data: unknown): OrderPlaced {
+  return OrderPlacedSchema.parse(data);
+}
+
+export function isOrderPlaced(data: unknown): data is OrderPlaced {
+  return OrderPlacedSchema.safeParse(data).success;
+}
+```
+
+**Go**:
+```go
+package schemas
+
+type OrderPlaced struct {
+    OrderID string  `json:"orderId"`
+    Amount  float64 `json:"amount"`
+}
+```
 
 ## Browser Testing with agent-browser
 
