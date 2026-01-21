@@ -10,6 +10,7 @@ import (
 	"github.com/filipexyz/notif/internal/domain"
 	"github.com/filipexyz/notif/internal/middleware"
 	"github.com/filipexyz/notif/internal/nats"
+	"github.com/filipexyz/notif/internal/schema"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -17,15 +18,17 @@ const maxPayloadSize = 64 * 1024 // 64KB
 
 // EmitHandler handles POST /emit.
 type EmitHandler struct {
-	publisher *nats.Publisher
-	queries   *db.Queries
+	publisher      *nats.Publisher
+	queries        *db.Queries
+	schemaRegistry *schema.Registry
 }
 
 // NewEmitHandler creates a new EmitHandler.
-func NewEmitHandler(publisher *nats.Publisher, queries *db.Queries) *EmitHandler {
+func NewEmitHandler(publisher *nats.Publisher, queries *db.Queries, schemaRegistry *schema.Registry) *EmitHandler {
 	return &EmitHandler{
-		publisher: publisher,
-		queries:   queries,
+		publisher:      publisher,
+		queries:        queries,
+		schemaRegistry: schemaRegistry,
 	}
 }
 
@@ -56,9 +59,50 @@ func (h *EmitHandler) Emit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Schema validation (if registry is configured and we have project context)
+	authCtx := middleware.GetAuthContext(r.Context())
+	if h.schemaRegistry != nil && authCtx != nil && authCtx.ProjectID != "" {
+		validationResult, err := h.schemaRegistry.ValidateEvent(r.Context(), authCtx.ProjectID, req.Topic, req.Data)
+		if err != nil {
+			slog.Error("schema validation error", "error", err, "topic", req.Topic)
+			// Don't block on validation errors - treat as no schema
+		} else if validationResult != nil && !validationResult.Valid {
+			// Get the schema to check validation mode
+			schemaForTopic, _ := h.schemaRegistry.GetSchemaForTopic(r.Context(), authCtx.ProjectID, req.Topic)
+			if schemaForTopic != nil && schemaForTopic.LatestVersion != nil {
+				switch schemaForTopic.LatestVersion.ValidationMode {
+				case schema.ValidationModeStrict:
+					switch schemaForTopic.LatestVersion.OnInvalid {
+					case schema.OnInvalidReject:
+						writeJSON(w, http.StatusBadRequest, map[string]any{
+							"error":             "schema validation failed",
+							"schema":            validationResult.Schema,
+							"version":           validationResult.Version,
+							"validation_errors": validationResult.Errors,
+						})
+						return
+					case schema.OnInvalidLog, schema.OnInvalidDLQ:
+						// Log but continue
+						slog.Warn("schema validation failed",
+							"topic", req.Topic,
+							"schema", validationResult.Schema,
+							"errors", validationResult.Errors,
+						)
+					}
+				case schema.ValidationModeWarn:
+					slog.Warn("schema validation warning",
+						"topic", req.Topic,
+						"schema", validationResult.Schema,
+						"errors", validationResult.Errors,
+					)
+				// ValidationModeDisabled - do nothing
+				}
+			}
+		}
+	}
+
 	// Create event with org and project context
 	event := domain.NewEvent(req.Topic, req.Data)
-	authCtx := middleware.GetAuthContext(r.Context())
 	if authCtx != nil {
 		event.OrgID = authCtx.OrgID
 		event.ProjectID = authCtx.ProjectID

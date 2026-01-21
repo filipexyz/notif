@@ -8,6 +8,7 @@ import (
 	"github.com/filipexyz/notif/internal/handler"
 	"github.com/filipexyz/notif/internal/middleware"
 	"github.com/filipexyz/notif/internal/nats"
+	"github.com/filipexyz/notif/internal/schema"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -49,7 +50,8 @@ func (s *Server) routes() http.Handler {
 	// Unified auth: accepts both API key (Bearer nsh_xxx) and Clerk JWT
 	// ================================================================
 	publisher := nats.NewPublisher(s.nats.JetStream())
-	emitHandler := handler.NewEmitHandler(publisher, queries)
+	schemaRegistry := schema.NewRegistry(queries)
+	emitHandler := handler.NewEmitHandler(publisher, queries, schemaRegistry)
 
 	consumerMgr := nats.NewConsumerManager(s.nats.Stream())
 	dlqPublisher := nats.NewDLQPublisher(s.nats.JetStream())
@@ -66,6 +68,8 @@ func (s *Server) routes() http.Handler {
 	statsHandler := handler.NewStatsHandler(queries, eventReader, dlqReader)
 	schedulesHandler := handler.NewSchedulesHandler(queries, s.schedulerWorker)
 	projectHandler := handler.NewProjectHandler(queries)
+
+	schemaHandler := handler.NewSchemaHandler(schemaRegistry)
 
 	// WebSocket endpoint at root (no /api/v1 prefix for WS)
 	r.Group(func(r chi.Router) {
@@ -113,6 +117,18 @@ func (s *Server) routes() http.Handler {
 		r.Get("/schedules/{id}", schedulesHandler.Get)
 		r.Delete("/schedules/{id}", schedulesHandler.Cancel)
 		r.Post("/schedules/{id}/run", schedulesHandler.Run)
+
+		// Schemas
+		r.Post("/schemas", schemaHandler.CreateSchema)
+		r.Get("/schemas", schemaHandler.ListSchemas)
+		r.Get("/schemas/for-topic/{topic}", schemaHandler.GetSchemaForTopic)
+		r.Get("/schemas/{name}", schemaHandler.GetSchema)
+		r.Put("/schemas/{name}", schemaHandler.UpdateSchema)
+		r.Delete("/schemas/{name}", schemaHandler.DeleteSchema)
+		r.Post("/schemas/{name}/versions", schemaHandler.CreateVersion)
+		r.Get("/schemas/{name}/versions", schemaHandler.ListVersions)
+		r.Get("/schemas/{name}/versions/{version}", schemaHandler.GetVersion)
+		r.Post("/schemas/{name}/validate", schemaHandler.Validate)
 
 		// Stats (observability)
 		r.Get("/stats/overview", statsHandler.Overview)

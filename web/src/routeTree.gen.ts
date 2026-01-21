@@ -13,9 +13,12 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as DlqRouteImport } from './routes/dlq'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WebhooksIndexRouteImport } from './routes/webhooks/index'
+import { Route as SchemasIndexRouteImport } from './routes/schemas/index'
 import { Route as SchedulesIndexRouteImport } from './routes/schedules/index'
 import { Route as WebhooksNewRouteImport } from './routes/webhooks/new'
 import { Route as WebhooksIdRouteImport } from './routes/webhooks/$id'
+import { Route as SchemasNewRouteImport } from './routes/schemas/new'
+import { Route as SchemasNameRouteImport } from './routes/schemas/$name'
 import { Route as SchedulesIdRouteImport } from './routes/schedules/$id'
 
 const SettingsRoute = SettingsRouteImport.update({
@@ -38,6 +41,11 @@ const WebhooksIndexRoute = WebhooksIndexRouteImport.update({
   path: '/webhooks/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SchemasIndexRoute = SchemasIndexRouteImport.update({
+  id: '/schemas/',
+  path: '/schemas/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SchedulesIndexRoute = SchedulesIndexRouteImport.update({
   id: '/schedules/',
   path: '/schedules/',
@@ -53,6 +61,16 @@ const WebhooksIdRoute = WebhooksIdRouteImport.update({
   path: '/webhooks/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SchemasNewRoute = SchemasNewRouteImport.update({
+  id: '/schemas/new',
+  path: '/schemas/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SchemasNameRoute = SchemasNameRouteImport.update({
+  id: '/schemas/$name',
+  path: '/schemas/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SchedulesIdRoute = SchedulesIdRouteImport.update({
   id: '/schedules/$id',
   path: '/schedules/$id',
@@ -64,9 +82,12 @@ export interface FileRoutesByFullPath {
   '/dlq': typeof DlqRoute
   '/settings': typeof SettingsRoute
   '/schedules/$id': typeof SchedulesIdRoute
+  '/schemas/$name': typeof SchemasNameRoute
+  '/schemas/new': typeof SchemasNewRoute
   '/webhooks/$id': typeof WebhooksIdRoute
   '/webhooks/new': typeof WebhooksNewRoute
   '/schedules': typeof SchedulesIndexRoute
+  '/schemas': typeof SchemasIndexRoute
   '/webhooks': typeof WebhooksIndexRoute
 }
 export interface FileRoutesByTo {
@@ -74,9 +95,12 @@ export interface FileRoutesByTo {
   '/dlq': typeof DlqRoute
   '/settings': typeof SettingsRoute
   '/schedules/$id': typeof SchedulesIdRoute
+  '/schemas/$name': typeof SchemasNameRoute
+  '/schemas/new': typeof SchemasNewRoute
   '/webhooks/$id': typeof WebhooksIdRoute
   '/webhooks/new': typeof WebhooksNewRoute
   '/schedules': typeof SchedulesIndexRoute
+  '/schemas': typeof SchemasIndexRoute
   '/webhooks': typeof WebhooksIndexRoute
 }
 export interface FileRoutesById {
@@ -85,9 +109,12 @@ export interface FileRoutesById {
   '/dlq': typeof DlqRoute
   '/settings': typeof SettingsRoute
   '/schedules/$id': typeof SchedulesIdRoute
+  '/schemas/$name': typeof SchemasNameRoute
+  '/schemas/new': typeof SchemasNewRoute
   '/webhooks/$id': typeof WebhooksIdRoute
   '/webhooks/new': typeof WebhooksNewRoute
   '/schedules/': typeof SchedulesIndexRoute
+  '/schemas/': typeof SchemasIndexRoute
   '/webhooks/': typeof WebhooksIndexRoute
 }
 export interface FileRouteTypes {
@@ -97,9 +124,12 @@ export interface FileRouteTypes {
     | '/dlq'
     | '/settings'
     | '/schedules/$id'
+    | '/schemas/$name'
+    | '/schemas/new'
     | '/webhooks/$id'
     | '/webhooks/new'
     | '/schedules'
+    | '/schemas'
     | '/webhooks'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -107,9 +137,12 @@ export interface FileRouteTypes {
     | '/dlq'
     | '/settings'
     | '/schedules/$id'
+    | '/schemas/$name'
+    | '/schemas/new'
     | '/webhooks/$id'
     | '/webhooks/new'
     | '/schedules'
+    | '/schemas'
     | '/webhooks'
   id:
     | '__root__'
@@ -117,9 +150,12 @@ export interface FileRouteTypes {
     | '/dlq'
     | '/settings'
     | '/schedules/$id'
+    | '/schemas/$name'
+    | '/schemas/new'
     | '/webhooks/$id'
     | '/webhooks/new'
     | '/schedules/'
+    | '/schemas/'
     | '/webhooks/'
   fileRoutesById: FileRoutesById
 }
@@ -128,9 +164,12 @@ export interface RootRouteChildren {
   DlqRoute: typeof DlqRoute
   SettingsRoute: typeof SettingsRoute
   SchedulesIdRoute: typeof SchedulesIdRoute
+  SchemasNameRoute: typeof SchemasNameRoute
+  SchemasNewRoute: typeof SchemasNewRoute
   WebhooksIdRoute: typeof WebhooksIdRoute
   WebhooksNewRoute: typeof WebhooksNewRoute
   SchedulesIndexRoute: typeof SchedulesIndexRoute
+  SchemasIndexRoute: typeof SchemasIndexRoute
   WebhooksIndexRoute: typeof WebhooksIndexRoute
 }
 
@@ -164,6 +203,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WebhooksIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/schemas/': {
+      id: '/schemas/'
+      path: '/schemas'
+      fullPath: '/schemas'
+      preLoaderRoute: typeof SchemasIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/schedules/': {
       id: '/schedules/'
       path: '/schedules'
@@ -185,6 +231,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WebhooksIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/schemas/new': {
+      id: '/schemas/new'
+      path: '/schemas/new'
+      fullPath: '/schemas/new'
+      preLoaderRoute: typeof SchemasNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/schemas/$name': {
+      id: '/schemas/$name'
+      path: '/schemas/$name'
+      fullPath: '/schemas/$name'
+      preLoaderRoute: typeof SchemasNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/schedules/$id': {
       id: '/schedules/$id'
       path: '/schedules/$id'
@@ -200,9 +260,12 @@ const rootRouteChildren: RootRouteChildren = {
   DlqRoute: DlqRoute,
   SettingsRoute: SettingsRoute,
   SchedulesIdRoute: SchedulesIdRoute,
+  SchemasNameRoute: SchemasNameRoute,
+  SchemasNewRoute: SchemasNewRoute,
   WebhooksIdRoute: WebhooksIdRoute,
   WebhooksNewRoute: WebhooksNewRoute,
   SchedulesIndexRoute: SchedulesIndexRoute,
+  SchemasIndexRoute: SchemasIndexRoute,
   WebhooksIndexRoute: WebhooksIndexRoute,
 }
 export const routeTree = rootRouteImport

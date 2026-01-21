@@ -152,3 +152,71 @@ export type RunScheduleResponse = {
   schedule_id: string
   event_id: string
 }
+
+// Schema
+export type SchemaVersion = {
+  id: string
+  schema_id: string
+  version: string
+  schema: Record<string, unknown>
+  validation_mode: 'strict' | 'warn' | 'disabled'
+  on_invalid: 'reject' | 'log' | 'dlq'
+  compatibility: 'backward' | 'forward' | 'full' | 'none'
+  examples?: unknown[]
+  fingerprint: string
+  is_latest: boolean
+  created_at: string
+  created_by?: string
+}
+
+export type Schema = {
+  id: string
+  org_id: string
+  project_id: string
+  name: string
+  topic_pattern: string
+  description?: string
+  tags?: string[]
+  created_at: string
+  updated_at: string
+  latest_version?: SchemaVersion
+}
+
+export type SchemasResponse = {
+  schemas: Schema[]
+  count: number
+}
+
+export type SchemaVersionsResponse = {
+  versions: SchemaVersion[]
+  count: number
+}
+
+export type CreateSchemaRequest = {
+  name: string
+  topic_pattern: string
+  description?: string
+  tags?: string[]
+}
+
+export type CreateSchemaVersionRequest = {
+  version: string
+  schema: Record<string, unknown>
+  validation_mode?: 'strict' | 'warn' | 'disabled'
+  on_invalid?: 'reject' | 'log' | 'dlq'
+  compatibility?: 'backward' | 'forward' | 'full' | 'none'
+  examples?: unknown[]
+}
+
+export type UpdateSchemaRequest = {
+  topic_pattern?: string
+  description?: string
+  tags?: string[]
+}
+
+export type ValidationResult = {
+  valid: boolean
+  errors?: { field: string; message: string; type?: string }[]
+  schema?: string
+  version?: string
+}
