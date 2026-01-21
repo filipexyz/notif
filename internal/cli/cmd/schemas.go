@@ -24,13 +24,13 @@ type SchemaDefinition struct {
 	Topic       string   `yaml:"topic" json:"topic"`
 	Tags        []string `yaml:"tags,omitempty" json:"tags,omitempty"`
 
-	Schema json.RawMessage `yaml:"schema" json:"schema"`
+	Schema interface{} `yaml:"schema" json:"schema"`
 
 	Validation *ValidationConfig `yaml:"validation,omitempty" json:"validation,omitempty"`
 
 	Compatibility string `yaml:"compatibility,omitempty" json:"compatibility,omitempty"`
 
-	Examples []json.RawMessage `yaml:"examples,omitempty" json:"examples,omitempty"`
+	Examples []interface{} `yaml:"examples,omitempty" json:"examples,omitempty"`
 }
 
 // ValidationConfig holds validation settings.
@@ -126,7 +126,7 @@ func pushSchemaFile(c *client.Client, filename string) error {
 	}
 
 	// Create version if specified
-	if def.Version != "" && len(def.Schema) > 0 {
+	if def.Version != "" && def.Schema != nil {
 		validationMode := "strict"
 		onInvalid := "reject"
 		if def.Validation != nil {
@@ -138,6 +138,12 @@ func pushSchemaFile(c *client.Client, filename string) error {
 			}
 		}
 
+		// Convert schema from interface{} to json.RawMessage
+		schemaJSON, err := json.Marshal(def.Schema)
+		if err != nil {
+			return err
+		}
+
 		var examples json.RawMessage
 		if len(def.Examples) > 0 {
 			examples, _ = json.Marshal(def.Examples)
@@ -145,7 +151,7 @@ func pushSchemaFile(c *client.Client, filename string) error {
 
 		version, err := c.SchemaVersionCreate(def.Name, client.CreateSchemaVersionRequest{
 			Version:        def.Version,
-			Schema:         def.Schema,
+			Schema:         schemaJSON,
 			ValidationMode: validationMode,
 			OnInvalid:      onInvalid,
 			Compatibility:  def.Compatibility,
