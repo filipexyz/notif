@@ -6,6 +6,7 @@ import { ProjectSelector } from "./ProjectSelector";
 const navItems = [
   { href: "/", label: "Events" },
   { href: "/webhooks", label: "Webhooks" },
+  { href: "/schemas", label: "Schemas" },
   { href: "/schedules", label: "Schedules" },
   { href: "/dlq", label: "DLQ" },
   { href: "/settings", label: "Settings" },

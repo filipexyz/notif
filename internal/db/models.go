@@ -77,6 +77,46 @@ type ScheduledEvent struct {
 	ProjectID    pgtype.Text        `json:"project_id"`
 }
 
+type Schema struct {
+	ID           string             `json:"id"`
+	OrgID        string             `json:"org_id"`
+	ProjectID    string             `json:"project_id"`
+	Name         string             `json:"name"`
+	TopicPattern string             `json:"topic_pattern"`
+	Description  pgtype.Text        `json:"description"`
+	Tags         []string           `json:"tags"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SchemaValidation struct {
+	ID              string             `json:"id"`
+	OrgID           string             `json:"org_id"`
+	ProjectID       string             `json:"project_id"`
+	EventID         pgtype.Text        `json:"event_id"`
+	SchemaID        pgtype.Text        `json:"schema_id"`
+	SchemaVersionID pgtype.Text        `json:"schema_version_id"`
+	Topic           pgtype.Text        `json:"topic"`
+	Valid           bool               `json:"valid"`
+	Errors          []byte             `json:"errors"`
+	ValidatedAt     pgtype.Timestamptz `json:"validated_at"`
+}
+
+type SchemaVersion struct {
+	ID             string             `json:"id"`
+	SchemaID       string             `json:"schema_id"`
+	Version        string             `json:"version"`
+	SchemaJson     []byte             `json:"schema_json"`
+	ValidationMode pgtype.Text        `json:"validation_mode"`
+	OnInvalid      pgtype.Text        `json:"on_invalid"`
+	Compatibility  pgtype.Text        `json:"compatibility"`
+	Examples       []byte             `json:"examples"`
+	Fingerprint    pgtype.Text        `json:"fingerprint"`
+	IsLatest       pgtype.Bool        `json:"is_latest"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	CreatedBy      pgtype.Text        `json:"created_by"`
+}
+
 type Webhook struct {
 	ID        pgtype.UUID        `json:"id"`
 	ApiKeyID  pgtype.UUID        `json:"api_key_id"`
