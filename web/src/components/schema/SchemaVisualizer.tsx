@@ -101,17 +101,16 @@ function PropertyRow({
         <span className={getTypeColor(type)}>{type}</span>
         {schema.format && <span className="text-neutral-400">({schema.format})</span>}
 
-        {/* Enum preview */}
+        {/* Enum values */}
         {schema.enum && (
-          <span className="text-neutral-400 truncate max-w-48">
-            [{schema.enum.slice(0, 3).map(v => JSON.stringify(v)).join(', ')}
-            {schema.enum.length > 3 && '...'}]
+          <span className="text-neutral-400">
+            [{schema.enum.map(v => JSON.stringify(v)).join(', ')}]
           </span>
         )}
 
         {/* Description */}
         {schema.description && (
-          <span className="text-neutral-400 truncate max-w-64 ml-2">// {schema.description}</span>
+          <span className="text-neutral-400 ml-2">// {schema.description}</span>
         )}
       </div>
 
