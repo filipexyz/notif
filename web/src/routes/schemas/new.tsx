@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check } from 'lucide-react'
 import { useState } from 'react'
 import { Button, Input } from '../../components/ui'
+import { SchemaEditor } from '../../components/schema'
 import { useApi } from '../../lib/api'
 import type { CreateSchemaRequest, Schema } from '../../lib/types'
 
@@ -26,8 +27,7 @@ function NewSchemaPage() {
   const [schemaJson, setSchemaJson] = useState('{\n  "type": "object",\n  "required": [],\n  "properties": {\n    \n  }\n}')
   const [validationMode, setValidationMode] = useState<'strict' | 'warn' | 'disabled'>('strict')
   const [onInvalid, setOnInvalid] = useState<'reject' | 'log' | 'dlq'>('reject')
-
-  const [jsonError, setJsonError] = useState<string | null>(null)
+  const [isValidJson, setIsValidJson] = useState(true)
 
   const createSchemaMutation = useMutation({
     mutationFn: async (data: CreateSchemaRequest) => {
@@ -61,16 +61,10 @@ function NewSchemaPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    setJsonError(null)
 
     // Validate JSON if creating version
-    if (createVersion) {
-      try {
-        JSON.parse(schemaJson)
-      } catch {
-        setJsonError('Invalid JSON schema')
-        return
-      }
+    if (createVersion && !isValidJson) {
+      return
     }
 
     const tagsArray = tags
@@ -96,40 +90,42 @@ function NewSchemaPage() {
         <h1 className="text-xl font-semibold text-neutral-900">New Schema</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="max-w-2xl">
+      <form onSubmit={handleSubmit} className="max-w-3xl">
         {/* Schema basics */}
         <div className="border border-neutral-200 bg-white p-4 mb-4">
           <h2 className="text-sm font-medium text-neutral-700 mb-4">Schema Details</h2>
 
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Name <span className="text-error">*</span>
-              </label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="order-placed"
-                required
-              />
-              <p className="text-xs text-neutral-500 mt-1">
-                Unique identifier for this schema (lowercase, hyphens allowed)
-              </p>
-            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
+                  Name <span className="text-error">*</span>
+                </label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="order-placed"
+                  required
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Unique identifier (lowercase, hyphens allowed)
+                </p>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
-                Topic Pattern <span className="text-error">*</span>
-              </label>
-              <Input
-                value={topicPattern}
-                onChange={(e) => setTopicPattern(e.target.value)}
-                placeholder="orders.placed or orders.*"
-                required
-              />
-              <p className="text-xs text-neutral-500 mt-1">
-                Events matching this pattern will be validated. Use * for single level, {'>'} for multi-level wildcard.
-              </p>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
+                  Topic Pattern <span className="text-error">*</span>
+                </label>
+                <Input
+                  value={topicPattern}
+                  onChange={(e) => setTopicPattern(e.target.value)}
+                  placeholder="orders.placed or orders.*"
+                  required
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Use * for single level, {'>'} for multi-level wildcard
+                </p>
+              </div>
             </div>
 
             <div>
@@ -157,7 +153,7 @@ function NewSchemaPage() {
         <div className="border border-neutral-200 bg-white p-4 mb-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-medium text-neutral-700">Initial Version</h2>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input
                 type="checkbox"
                 checked={createVersion}
@@ -187,9 +183,9 @@ function NewSchemaPage() {
                     onChange={(e) => setValidationMode(e.target.value as typeof validationMode)}
                     className="w-full px-3 py-2 border border-neutral-200 text-sm"
                   >
-                    <option value="strict">Strict - Enforce validation</option>
-                    <option value="warn">Warn - Log but allow</option>
-                    <option value="disabled">Disabled - Skip validation</option>
+                    <option value="strict">Strict - Enforce</option>
+                    <option value="warn">Warn - Log only</option>
+                    <option value="disabled">Disabled</option>
                   </select>
                 </div>
                 <div>
@@ -199,22 +195,20 @@ function NewSchemaPage() {
                     onChange={(e) => setOnInvalid(e.target.value as typeof onInvalid)}
                     className="w-full px-3 py-2 border border-neutral-200 text-sm"
                   >
-                    <option value="reject">Reject - Return error</option>
-                    <option value="log">Log - Log and continue</option>
-                    <option value="dlq">DLQ - Send to dead letter queue</option>
+                    <option value="reject">Reject</option>
+                    <option value="log">Log</option>
+                    <option value="dlq">DLQ</option>
                   </select>
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">JSON Schema</label>
-                <textarea
+                <SchemaEditor
                   value={schemaJson}
-                  onChange={(e) => setSchemaJson(e.target.value)}
-                  className="w-full px-3 py-2 border border-neutral-200 font-mono text-sm h-64"
-                  required={createVersion}
+                  onChange={setSchemaJson}
+                  onValidChange={setIsValidJson}
                 />
-                {jsonError && <p className="text-sm text-error mt-1">{jsonError}</p>}
               </div>
             </div>
           )}
@@ -229,7 +223,10 @@ function NewSchemaPage() {
 
         {/* Submit */}
         <div className="flex gap-2">
-          <Button type="submit" disabled={createSchemaMutation.isPending}>
+          <Button
+            type="submit"
+            disabled={createSchemaMutation.isPending || (createVersion && !isValidJson)}
+          >
             <Check className="w-4 h-4 mr-1.5" />
             {createSchemaMutation.isPending ? 'Creating...' : 'Create Schema'}
           </Button>

@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Trash2, Plus, Check, X } from 'lucide-react'
+import { ArrowLeft, Trash2, Plus, Check, X, Code, Eye, Pencil, Save } from 'lucide-react'
 import { useState } from 'react'
 import { Button, Badge, Input } from '../../components/ui'
+import { SchemaVisualizer, SchemaEditor } from '../../components/schema'
 import { useApi, useProjectReady } from '../../lib/api'
 import type { Schema, SchemaVersion, SchemaVersionsResponse, CreateSchemaVersionRequest } from '../../lib/types'
 
@@ -19,6 +20,10 @@ function SchemaDetailPage() {
 
   const [showNewVersion, setShowNewVersion] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [viewMode, setViewMode] = useState<'visual' | 'json'>('visual')
+  const [editMode, setEditMode] = useState(false)
+  const [editedSchema, setEditedSchema] = useState('')
+  const [isValidJson, setIsValidJson] = useState(true)
 
   // Fetch schema
   const { data: schema, isLoading, error } = useQuery({
@@ -44,6 +49,52 @@ function SchemaDetailPage() {
     },
   })
 
+  // Update schema mutation (creates new version)
+  const updateMutation = useMutation({
+    mutationFn: (data: CreateSchemaVersionRequest) =>
+      api(`/api/v1/schemas/${name}/versions`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schema', name] })
+      queryClient.invalidateQueries({ queryKey: ['schema-versions', name] })
+      queryClient.invalidateQueries({ queryKey: ['schemas'] })
+      setEditMode(false)
+    },
+  })
+
+  const handleStartEdit = () => {
+    if (schema?.latest_version) {
+      setEditedSchema(JSON.stringify(schema.latest_version.schema, null, 2))
+      setEditMode(true)
+    }
+  }
+
+  const handleSaveEdit = () => {
+    if (!isValidJson || !schema?.latest_version) return
+
+    try {
+      const parsedSchema = JSON.parse(editedSchema)
+      const currentVersion = schema.latest_version.version
+      const newVersion = bumpPatchVersion(currentVersion)
+
+      updateMutation.mutate({
+        version: newVersion,
+        schema: parsedSchema,
+        validation_mode: schema.latest_version.validation_mode,
+        on_invalid: schema.latest_version.on_invalid,
+      })
+    } catch {
+      // Invalid JSON, shouldn't happen if isValidJson is true
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditMode(false)
+    setEditedSchema('')
+  }
+
   if (isLoading) {
     return (
       <div className="p-4">
@@ -62,6 +113,8 @@ function SchemaDetailPage() {
     )
   }
 
+  const currentSchema = schema.latest_version?.schema
+
   return (
     <div className="p-4">
       {/* Header */}
@@ -78,6 +131,12 @@ function SchemaDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {!editMode && schema.latest_version && (
+            <Button variant="outline" size="sm" onClick={handleStartEdit}>
+              <Pencil className="w-4 h-4 mr-1.5" />
+              Edit Schema
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -116,64 +175,132 @@ function SchemaDetailPage() {
         </div>
       )}
 
-      {/* Schema info */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      {/* Schema info cards */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="border border-neutral-200 bg-white p-4">
-          <h3 className="text-sm font-medium text-neutral-500 mb-2">Topic Pattern</h3>
+          <h3 className="text-xs font-medium text-neutral-500 mb-1">Topic Pattern</h3>
           <code className="text-sm font-mono text-neutral-900 bg-neutral-100 px-2 py-1">
             {schema.topic_pattern}
           </code>
         </div>
         <div className="border border-neutral-200 bg-white p-4">
-          <h3 className="text-sm font-medium text-neutral-500 mb-2">Tags</h3>
+          <h3 className="text-xs font-medium text-neutral-500 mb-1">Version</h3>
+          <Badge variant="info" className="text-sm">
+            {schema.latest_version?.version || 'No version'}
+          </Badge>
+        </div>
+        <div className="border border-neutral-200 bg-white p-4">
+          <h3 className="text-xs font-medium text-neutral-500 mb-1">Validation</h3>
+          <Badge variant={schema.latest_version?.validation_mode === 'strict' ? 'error' : 'default'}>
+            {schema.latest_version?.validation_mode || 'none'}
+          </Badge>
+        </div>
+        <div className="border border-neutral-200 bg-white p-4">
+          <h3 className="text-xs font-medium text-neutral-500 mb-1">Tags</h3>
           <div className="flex gap-1 flex-wrap">
             {schema.tags?.map((tag) => (
-              <Badge key={tag} variant="default">{tag}</Badge>
+              <Badge key={tag} variant="default" className="text-xs">{tag}</Badge>
             ))}
             {(!schema.tags || schema.tags.length === 0) && (
-              <span className="text-sm text-neutral-400">No tags</span>
+              <span className="text-sm text-neutral-400">-</span>
             )}
           </div>
         </div>
       </div>
 
-      {/* Latest version info */}
-      {schema.latest_version && (
-        <div className="border border-neutral-200 bg-white p-4 mb-6">
-          <h3 className="text-sm font-medium text-neutral-700 mb-3">Latest Version: {schema.latest_version.version}</h3>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <span className="text-neutral-500">Validation Mode:</span>{' '}
-              <Badge variant={schema.latest_version.validation_mode === 'strict' ? 'error' : 'default'}>
-                {schema.latest_version.validation_mode}
-              </Badge>
+      {/* Schema viewer/editor */}
+      {currentSchema && (
+        <div className="border border-neutral-200 bg-white mb-6">
+          {/* Toolbar */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 bg-neutral-50">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-neutral-700">JSON Schema</h3>
+              {editMode && (
+                <Badge variant="warning" className="text-xs">Editing</Badge>
+              )}
             </div>
-            <div>
-              <span className="text-neutral-500">On Invalid:</span>{' '}
-              <Badge variant="default">{schema.latest_version.on_invalid}</Badge>
-            </div>
-            <div>
-              <span className="text-neutral-500">Fingerprint:</span>{' '}
-              <code className="text-xs font-mono text-neutral-600">
-                {schema.latest_version.fingerprint.slice(0, 16)}...
-              </code>
+            <div className="flex items-center gap-2">
+              {editMode ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCancelEdit}
+                    disabled={updateMutation.isPending}
+                  >
+                    <X className="w-4 h-4 mr-1.5" />
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveEdit}
+                    disabled={!isValidJson || updateMutation.isPending}
+                  >
+                    <Save className="w-4 h-4 mr-1.5" />
+                    {updateMutation.isPending ? 'Saving...' : 'Save as New Version'}
+                  </Button>
+                </>
+              ) : (
+                <div className="flex border border-neutral-200 bg-white">
+                  <button
+                    onClick={() => setViewMode('visual')}
+                    className={`px-3 py-1.5 text-sm flex items-center gap-1.5 ${
+                      viewMode === 'visual'
+                        ? 'bg-primary-500 text-white'
+                        : 'text-neutral-600 hover:bg-neutral-100'
+                    }`}
+                  >
+                    <Eye className="w-4 h-4" />
+                    Visual
+                  </button>
+                  <button
+                    onClick={() => setViewMode('json')}
+                    className={`px-3 py-1.5 text-sm flex items-center gap-1.5 ${
+                      viewMode === 'json'
+                        ? 'bg-primary-500 text-white'
+                        : 'text-neutral-600 hover:bg-neutral-100'
+                    }`}
+                  >
+                    <Code className="w-4 h-4" />
+                    JSON
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* JSON Schema preview */}
-          <div className="mt-4">
-            <h4 className="text-sm font-medium text-neutral-500 mb-2">JSON Schema</h4>
-            <pre className="text-xs font-mono bg-neutral-50 p-3 overflow-x-auto border border-neutral-200 max-h-64 overflow-y-auto">
-              {JSON.stringify(schema.latest_version.schema, null, 2)}
+          {/* Content */}
+          {editMode ? (
+            <SchemaEditor
+              value={editedSchema}
+              onChange={setEditedSchema}
+              onValidChange={setIsValidJson}
+            />
+          ) : viewMode === 'visual' ? (
+            <div className="p-4 max-h-96 overflow-auto">
+              <SchemaVisualizer schema={currentSchema} />
+            </div>
+          ) : (
+            <pre className="p-4 text-sm font-mono bg-neutral-50 overflow-auto max-h-96">
+              {JSON.stringify(currentSchema, null, 2)}
             </pre>
-          </div>
+          )}
+
+          {updateMutation.error && (
+            <div className="px-4 py-2 border-t border-error bg-red-50 text-sm text-error">
+              {(updateMutation.error as Error).message}
+            </div>
+          )}
         </div>
       )}
 
       {/* Versions section */}
       <div className="border border-neutral-200 bg-white">
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
-          <h3 className="text-sm font-medium text-neutral-700">Versions</h3>
+          <h3 className="text-sm font-medium text-neutral-700">
+            Version History
+            {versions && <span className="text-neutral-400 ml-2">({versions.length})</span>}
+          </h3>
           <Button size="sm" variant="outline" onClick={() => setShowNewVersion(true)}>
             <Plus className="w-4 h-4 mr-1.5" />
             New Version
@@ -184,6 +311,7 @@ function SchemaDetailPage() {
         {showNewVersion && (
           <NewVersionForm
             schemaName={name}
+            currentSchema={currentSchema}
             onClose={() => setShowNewVersion(false)}
           />
         )}
@@ -207,6 +335,7 @@ function SchemaDetailPage() {
 
 function VersionRow({ version }: { version: SchemaVersion }) {
   const [expanded, setExpanded] = useState(false)
+  const [viewMode, setViewMode] = useState<'visual' | 'json'>('visual')
 
   return (
     <div className="px-4 py-3">
@@ -231,23 +360,68 @@ function VersionRow({ version }: { version: SchemaVersion }) {
         </div>
       </div>
       {expanded && (
-        <pre className="mt-3 text-xs font-mono bg-neutral-50 p-3 overflow-x-auto border border-neutral-200 max-h-48 overflow-y-auto">
-          {JSON.stringify(version.schema, null, 2)}
-        </pre>
+        <div className="mt-3 border border-neutral-200">
+          {/* View toggle */}
+          <div className="flex border-b border-neutral-200 bg-neutral-50">
+            <button
+              onClick={() => setViewMode('visual')}
+              className={`px-3 py-1.5 text-xs flex items-center gap-1 ${
+                viewMode === 'visual'
+                  ? 'bg-white border-b-2 border-primary-500 text-primary-600'
+                  : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              <Eye className="w-3 h-3" />
+              Visual
+            </button>
+            <button
+              onClick={() => setViewMode('json')}
+              className={`px-3 py-1.5 text-xs flex items-center gap-1 ${
+                viewMode === 'json'
+                  ? 'bg-white border-b-2 border-primary-500 text-primary-600'
+                  : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              <Code className="w-3 h-3" />
+              JSON
+            </button>
+          </div>
+          {viewMode === 'visual' ? (
+            <div className="p-3 max-h-64 overflow-auto bg-white">
+              <SchemaVisualizer schema={version.schema} />
+            </div>
+          ) : (
+            <pre className="p-3 text-xs font-mono bg-neutral-50 overflow-auto max-h-64">
+              {JSON.stringify(version.schema, null, 2)}
+            </pre>
+          )}
+        </div>
       )}
     </div>
   )
 }
 
-function NewVersionForm({ schemaName, onClose }: { schemaName: string; onClose: () => void }) {
+function NewVersionForm({
+  schemaName,
+  currentSchema,
+  onClose,
+}: {
+  schemaName: string
+  currentSchema?: Record<string, unknown>
+  onClose: () => void
+}) {
   const api = useApi()
   const queryClient = useQueryClient()
 
   const [version, setVersion] = useState('')
-  const [schemaJson, setSchemaJson] = useState('{\n  "type": "object",\n  "properties": {}\n}')
+  const [schemaJson, setSchemaJson] = useState(
+    currentSchema
+      ? JSON.stringify(currentSchema, null, 2)
+      : '{\n  "type": "object",\n  "properties": {}\n}'
+  )
   const [validationMode, setValidationMode] = useState<'strict' | 'warn' | 'disabled'>('strict')
   const [onInvalid, setOnInvalid] = useState<'reject' | 'log' | 'dlq'>('reject')
-  const [jsonError, setJsonError] = useState<string | null>(null)
+  const [isValidJson, setIsValidJson] = useState(true)
 
   const createMutation = useMutation({
     mutationFn: (data: CreateSchemaVersionRequest) =>
@@ -265,7 +439,7 @@ function NewVersionForm({ schemaName, onClose }: { schemaName: string; onClose: 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    setJsonError(null)
+    if (!isValidJson) return
 
     try {
       const parsedSchema = JSON.parse(schemaJson)
@@ -276,7 +450,7 @@ function NewVersionForm({ schemaName, onClose }: { schemaName: string; onClose: 
         on_invalid: onInvalid,
       })
     } catch {
-      setJsonError('Invalid JSON schema')
+      // Invalid JSON
     }
   }
 
@@ -320,21 +494,18 @@ function NewVersionForm({ schemaName, onClose }: { schemaName: string; onClose: 
 
       <div className="mb-4">
         <label className="block text-sm font-medium text-neutral-700 mb-1">JSON Schema</label>
-        <textarea
+        <SchemaEditor
           value={schemaJson}
-          onChange={(e) => setSchemaJson(e.target.value)}
-          className="w-full px-3 py-2 border border-neutral-200 font-mono text-sm h-48"
-          placeholder='{"type": "object", "properties": {}}'
-          required
+          onChange={setSchemaJson}
+          onValidChange={setIsValidJson}
         />
-        {jsonError && <p className="text-sm text-error mt-1">{jsonError}</p>}
         {createMutation.error && (
           <p className="text-sm text-error mt-1">{(createMutation.error as Error).message}</p>
         )}
       </div>
 
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={createMutation.isPending}>
+        <Button type="submit" size="sm" disabled={!isValidJson || createMutation.isPending}>
           <Check className="w-4 h-4 mr-1.5" />
           {createMutation.isPending ? 'Creating...' : 'Create Version'}
         </Button>
@@ -345,4 +516,13 @@ function NewVersionForm({ schemaName, onClose }: { schemaName: string; onClose: 
       </div>
     </form>
   )
+}
+
+function bumpPatchVersion(v: string): string {
+  const parts = v.split('.')
+  if (parts.length !== 3) {
+    return v + '.1'
+  }
+  const patch = parseInt(parts[2], 10) || 0
+  return `${parts[0]}.${parts[1]}.${patch + 1}`
 }
