@@ -1,7 +1,7 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
 import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/tanstack-react-start'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { ReactNode, useEffect } from 'react'
+import { QueryClientProvider, useQueryClient } from '@tanstack/react-query'
+import { ReactNode, useEffect, useRef } from 'react'
 
 import { TopNav } from '../components/layout/TopNav'
 import { ServerConnect } from '../components/auth/ServerConnect'
@@ -104,6 +104,30 @@ function MaybeClerkProvider({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+// Invalidate all queries when server changes
+function ServerChangeHandler() {
+  const { server } = useServer()
+  const queryClient = useQueryClient()
+  const prevServerUrl = useRef<string | null | undefined>(undefined)
+
+  useEffect(() => {
+    // Skip initial render
+    if (prevServerUrl.current === undefined) {
+      prevServerUrl.current = server?.url ?? null
+      return
+    }
+
+    const currentUrl = server?.url ?? null
+    if (currentUrl !== prevServerUrl.current) {
+      // Server changed - invalidate all queries to refetch with new server
+      queryClient.invalidateQueries()
+      prevServerUrl.current = currentUrl
+    }
+  }, [server?.url, queryClient])
+
+  return null
+}
+
 // Auto-connect to cloud when user is already signed in with Clerk
 function AutoConnectIfSignedIn() {
   const { isSignedIn, isLoaded } = useAuth()
@@ -123,6 +147,18 @@ function AutoConnectIfSignedIn() {
 
 // Inner router that decides what to show based on server selection
 function ServerRouter() {
+  const { server, isConnected, isLoading } = useServer()
+
+  // Handle query invalidation on server change
+  return (
+    <>
+      <ServerChangeHandler />
+      <ServerRouterContent />
+    </>
+  )
+}
+
+function ServerRouterContent() {
   const { server, isConnected, isLoading } = useServer()
 
   if (isLoading) {
