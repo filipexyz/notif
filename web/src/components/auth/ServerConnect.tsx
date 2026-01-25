@@ -6,7 +6,7 @@ import { useServer, ServerConfig } from '../../lib/server-context'
 const CLERK_AVAILABLE = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 export function ServerConnect() {
-  const { connect, testConnection, savedServers, isLoading } = useServer()
+  const { connect, testConnection, savedServers, isLoading, clearManualDisconnect } = useServer()
   // If Clerk not configured, skip to self-hosted directly
   const [mode, setMode] = useState<'select' | 'cloud' | 'self-hosted'>(
     CLERK_AVAILABLE ? 'select' : 'self-hosted'
@@ -72,7 +72,10 @@ export function ServerConnect() {
           <div className="space-y-3">
             {CLERK_AVAILABLE && (
               <button
-                onClick={() => setMode('cloud')}
+                onClick={() => {
+                  clearManualDisconnect()  // Allow auto-connect after Sign In
+                  setMode('cloud')
+                }}
                 className="w-full p-4 text-left bg-white border border-neutral-200 hover:border-primary-500 hover:bg-primary-50 transition-colors group"
               >
                 <div className="flex items-center gap-3">

@@ -23,6 +23,7 @@ interface ServerContextValue {
   manualDisconnect: boolean
   connect: (config: ServerConfig) => Promise<boolean>
   disconnect: () => void
+  clearManualDisconnect: () => void
   testConnection: (config: ServerConfig) => Promise<{ ok: boolean; error?: string }>
   saveServer: (config: ServerConfig) => void
   removeServer: (url: string) => void
@@ -172,6 +173,10 @@ export function ServerProvider({ children }: { children: ReactNode }) {
     setServer(null)
   }
 
+  const clearManualDisconnect = () => {
+    setManualDisconnect(false)
+  }
+
   const saveServer = (config: ServerConfig) => {
     setSavedServers(prev => {
       const existing = prev.findIndex(s => s.url === config.url)
@@ -201,6 +206,7 @@ export function ServerProvider({ children }: { children: ReactNode }) {
         manualDisconnect,
         connect,
         disconnect,
+        clearManualDisconnect,
         testConnection,
         saveServer,
         removeServer,
