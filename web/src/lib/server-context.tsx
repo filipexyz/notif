@@ -20,6 +20,7 @@ interface ServerContextValue {
   isConnected: boolean
   isLoading: boolean
   savedServers: ServerConfig[]
+  manualDisconnect: boolean
   connect: (config: ServerConfig) => Promise<boolean>
   disconnect: () => void
   testConnection: (config: ServerConfig) => Promise<{ ok: boolean; error?: string }>
@@ -76,6 +77,7 @@ export function ServerProvider({ children }: { children: ReactNode }) {
   const [server, setServer] = useState<ServerConfig | null>(null)
   const [savedServers, setSavedServers] = useState<ServerConfig[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [manualDisconnect, setManualDisconnect] = useState(false)
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -143,6 +145,9 @@ export function ServerProvider({ children }: { children: ReactNode }) {
   }
 
   const connect = async (config: ServerConfig): Promise<boolean> => {
+    // Clear manual disconnect flag when connecting
+    setManualDisconnect(false)
+    
     // For cloud mode, use default URL and skip connection test (Clerk handles auth)
     if (config.type === 'cloud') {
       setServer({
@@ -162,6 +167,8 @@ export function ServerProvider({ children }: { children: ReactNode }) {
   }
 
   const disconnect = () => {
+    // Set flag to prevent auto-reconnect
+    setManualDisconnect(true)
     setServer(null)
   }
 
@@ -191,6 +198,7 @@ export function ServerProvider({ children }: { children: ReactNode }) {
         isConnected: server !== null,
         isLoading,
         savedServers,
+        manualDisconnect,
         connect,
         disconnect,
         testConnection,
