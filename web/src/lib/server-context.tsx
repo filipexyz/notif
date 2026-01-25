@@ -21,9 +21,12 @@ interface ServerContextValue {
   isLoading: boolean
   savedServers: ServerConfig[]
   manualDisconnect: boolean
+  showServerModal: boolean
   connect: (config: ServerConfig) => Promise<boolean>
   disconnect: () => void
   clearManualDisconnect: () => void
+  openServerModal: () => void
+  closeServerModal: () => void
   testConnection: (config: ServerConfig) => Promise<{ ok: boolean; error?: string }>
   saveServer: (config: ServerConfig) => void
   removeServer: (url: string) => void
@@ -79,6 +82,7 @@ export function ServerProvider({ children }: { children: ReactNode }) {
   const [savedServers, setSavedServers] = useState<ServerConfig[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [manualDisconnect, setManualDisconnect] = useState(false)
+  const [showServerModal, setShowServerModal] = useState(false)
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -177,6 +181,14 @@ export function ServerProvider({ children }: { children: ReactNode }) {
     setManualDisconnect(false)
   }
 
+  const openServerModal = () => {
+    setShowServerModal(true)
+  }
+
+  const closeServerModal = () => {
+    setShowServerModal(false)
+  }
+
   const saveServer = (config: ServerConfig) => {
     setSavedServers(prev => {
       const existing = prev.findIndex(s => s.url === config.url)
@@ -204,9 +216,12 @@ export function ServerProvider({ children }: { children: ReactNode }) {
         isLoading,
         savedServers,
         manualDisconnect,
+        showServerModal,
         connect,
         disconnect,
         clearManualDisconnect,
+        openServerModal,
+        closeServerModal,
         testConnection,
         saveServer,
         removeServer,

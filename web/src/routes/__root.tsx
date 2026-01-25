@@ -121,6 +121,15 @@ function AutoConnectIfSignedIn() {
   return null
 }
 
+// Modal overlay for switching servers while connected
+function ServerModal() {
+  const { showServerModal, closeServerModal } = useServer()
+  
+  if (!showServerModal) return null
+  
+  return <ServerConnect isModal onClose={closeServerModal} />
+}
+
 // Inner router that decides what to show based on server selection
 function ServerRouter() {
   const { server, isConnected, isLoading } = useServer()
@@ -147,7 +156,12 @@ function ServerRouter() {
 
   // Self-hosted server - bypass Clerk, use mock provider
   if (server?.type === 'self-hosted') {
-    return <SelfHostedApp />
+    return (
+      <>
+        <SelfHostedApp />
+        <ServerModal />
+      </>
+    )
   }
 
   // Cloud server - use Clerk auth
@@ -160,6 +174,7 @@ function ServerRouter() {
     <>
       <SignedIn>
         <CloudAuthenticatedApp />
+        <ServerModal />
       </SignedIn>
       <SignedOut>
         <ServerConnect />

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useServer } from '../../lib/server-context'
 
 export function ServerSwitcher() {
-  const { server, savedServers, connect, disconnect } = useServer()
+  const { server, savedServers, connect, openServerModal } = useServer()
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -18,7 +18,7 @@ export function ServerSwitcher() {
   }, [])
 
   const handleSwitchServer = () => {
-    disconnect()
+    openServerModal()
     setIsOpen(false)
   }
 
