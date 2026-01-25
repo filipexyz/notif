@@ -107,15 +107,16 @@ function MaybeClerkProvider({ children }: { children: ReactNode }) {
 // Auto-connect to cloud when user is already signed in with Clerk
 function AutoConnectIfSignedIn() {
   const { isSignedIn, isLoaded } = useAuth()
-  const { connect, isConnected, manualDisconnect } = useServer()
+  const { connect, isConnected, manualDisconnect, isLoading } = useServer()
 
   useEffect(() => {
+    // Wait for localStorage to load before auto-connecting
     // If user is signed in with Clerk but not connected to a server,
     // automatically connect to cloud (unless user manually disconnected)
-    if (isLoaded && isSignedIn && !isConnected && !manualDisconnect) {
+    if (isLoaded && !isLoading && isSignedIn && !isConnected && !manualDisconnect) {
       connect({ type: 'cloud' })
     }
-  }, [isLoaded, isSignedIn, isConnected, manualDisconnect, connect])
+  }, [isLoaded, isLoading, isSignedIn, isConnected, manualDisconnect, connect])
 
   return null
 }
