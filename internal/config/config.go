@@ -6,6 +6,16 @@ import (
 	"github.com/caarlos0/env/v10"
 )
 
+// AuthMode determines the authentication mode for the server.
+type AuthMode string
+
+const (
+	// AuthModeClerk uses Clerk for dashboard auth + API keys for API access.
+	AuthModeClerk AuthMode = "clerk"
+	// AuthModeLocal uses only API keys (no external auth provider). For self-hosting.
+	AuthModeLocal AuthMode = "local"
+)
+
 type Config struct {
 	// Server
 	Port            string        `env:"PORT" envDefault:"8080"`
@@ -21,14 +31,25 @@ type Config struct {
 	LogLevel  string `env:"LOG_LEVEL" envDefault:"info"`
 	LogFormat string `env:"LOG_FORMAT" envDefault:"json"`
 
-	// Clerk Authentication (for dashboard routes)
-	ClerkSecretKey string `env:"CLERK_SECRET_KEY"`
+	// Authentication
+	// AUTH_MODE: "clerk" (default) or "local" (self-hosted, API keys only)
+	AuthMode       AuthMode `env:"AUTH_MODE" envDefault:"clerk"`
+	ClerkSecretKey string   `env:"CLERK_SECRET_KEY"`
+
+	// Self-hosted mode settings (used when AUTH_MODE=local)
+	// Default org ID for self-hosted single-tenant mode
+	DefaultOrgID string `env:"DEFAULT_ORG_ID" envDefault:"org_default"`
 
 	// CORS
 	CORSOrigins []string `env:"CORS_ORIGINS" envSeparator:"," envDefault:"http://localhost:3000,http://localhost:5173"`
 
 	// Terminal
 	CLIBinaryPath string `env:"CLI_BINARY_PATH" envDefault:"/app/notif"`
+}
+
+// IsSelfHosted returns true if running in self-hosted mode (no Clerk).
+func (c *Config) IsSelfHosted() bool {
+	return c.AuthMode == AuthModeLocal
 }
 
 func Load() (*Config, error) {

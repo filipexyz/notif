@@ -309,7 +309,21 @@ curl -X POST https://api.notif.sh/api/v1/webhooks \
 
 ## Self-Hosting
 
-notif.sh is open source. See [CONTRIBUTING.md](CONTRIBUTING.md) for self-hosting and development instructions.
+Run your own notif.sh instance:
+
+```bash
+# Quick start
+git clone https://github.com/filipexyz/notif.git
+cd notif
+docker compose -f docker-compose.selfhost.yaml up -d
+
+# Get your API key
+curl -X POST http://localhost:8080/api/v1/bootstrap
+```
+
+See [SELFHOST.md](SELFHOST.md) for complete self-hosting instructions.
+
+For development setup, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

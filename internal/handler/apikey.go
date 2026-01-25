@@ -39,9 +39,10 @@ type APIKeyResponse struct {
 }
 
 // Create creates a new API key for the authenticated organization and project.
+// Works with both Clerk auth (UserID) and API key auth (APIKeyID) in self-hosted mode.
 func (h *APIKeyHandler) Create(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
-	if authCtx == nil || authCtx.UserID == nil {
+	if authCtx == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -99,9 +100,10 @@ func (h *APIKeyHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // List lists all API keys for the authenticated project.
+// Works with both Clerk auth (UserID) and API key auth (APIKeyID) in self-hosted mode.
 func (h *APIKeyHandler) List(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
-	if authCtx == nil || authCtx.UserID == nil {
+	if authCtx == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -142,9 +144,10 @@ func (h *APIKeyHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Revoke revokes an API key (soft delete).
+// Works with both Clerk auth (UserID) and API key auth (APIKeyID) in self-hosted mode.
 func (h *APIKeyHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	authCtx := middleware.GetAuthContext(r.Context())
-	if authCtx == nil || authCtx.UserID == nil {
+	if authCtx == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
