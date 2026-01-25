@@ -2,9 +2,15 @@ import { useState } from 'react'
 import { SignInButton } from '@clerk/tanstack-react-start'
 import { useServer, ServerConfig } from '../../lib/server-context'
 
+// Check if Clerk is configured
+const CLERK_AVAILABLE = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
 export function ServerConnect() {
   const { connect, testConnection, savedServers, isLoading } = useServer()
-  const [mode, setMode] = useState<'select' | 'cloud' | 'self-hosted'>('select')
+  // If Clerk not configured, skip to self-hosted directly
+  const [mode, setMode] = useState<'select' | 'cloud' | 'self-hosted'>(
+    CLERK_AVAILABLE ? 'select' : 'self-hosted'
+  )
   const [serverUrl, setServerUrl] = useState('http://localhost:8080')
   const [apiKey, setApiKey] = useState('')
   const [serverName, setServerName] = useState('')
@@ -82,22 +88,24 @@ export function ServerConnect() {
           </div>
 
           <div className="space-y-3">
-            <button
-              onClick={() => setMode('cloud')}
-              className="w-full p-4 text-left bg-white border border-neutral-200 hover:border-primary-500 hover:bg-primary-50 transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">☁️</span>
-                <div>
-                  <div className="font-medium text-neutral-900 group-hover:text-primary-600">
-                    notif.sh Cloud
-                  </div>
-                  <div className="text-sm text-neutral-500">
-                    Managed service — sign in with your account
+            {CLERK_AVAILABLE && (
+              <button
+                onClick={() => setMode('cloud')}
+                className="w-full p-4 text-left bg-white border border-neutral-200 hover:border-primary-500 hover:bg-primary-50 transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">☁️</span>
+                  <div>
+                    <div className="font-medium text-neutral-900 group-hover:text-primary-600">
+                      notif.sh Cloud
+                    </div>
+                    <div className="text-sm text-neutral-500">
+                      Managed service — sign in with your account
+                    </div>
                   </div>
                 </div>
-              </div>
-            </button>
+              </button>
+            )}
 
             <button
               onClick={() => setMode('self-hosted')}

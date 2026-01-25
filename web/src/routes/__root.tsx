@@ -1,6 +1,7 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
 import { ClerkProvider, SignedIn, SignedOut } from '@clerk/tanstack-react-start'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { ReactNode } from 'react'
 
 import { TopNav } from '../components/layout/TopNav'
 import { ServerConnect } from '../components/auth/ServerConnect'
@@ -9,6 +10,18 @@ import { ServerProvider, useServer } from '../lib/server-context'
 import { ProjectProvider } from '../lib/project-context'
 
 import appCss from '../styles.css?url'
+
+// Clerk publishable key - optional for self-hosted only mode
+const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+// Conditional Clerk provider - only wrap if key is available
+function MaybeClerkProvider({ children }: { children: ReactNode }) {
+  if (!CLERK_PUBLISHABLE_KEY) {
+    // No Clerk key - self-hosted only mode
+    return <>{children}</>
+  }
+  return <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>{children}</ClerkProvider>
+}
 
 export const Route = createRootRoute({
   head: () => ({
@@ -102,7 +115,12 @@ function ServerRouter() {
     return <SelfHostedApp />
   }
 
-  // Cloud server - use Clerk auth
+  // Cloud server - use Clerk auth (only if Clerk is configured)
+  if (!CLERK_PUBLISHABLE_KEY) {
+    // No Clerk configured - show server connect (self-hosted only mode)
+    return <ServerConnect />
+  }
+
   return (
     <>
       <SignedIn>
@@ -122,13 +140,13 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body>
-        <ClerkProvider>
+        <MaybeClerkProvider>
           <QueryClientProvider client={queryClient}>
             <ServerProvider>
               <ServerRouter />
             </ServerProvider>
           </QueryClientProvider>
-        </ClerkProvider>
+        </MaybeClerkProvider>
         <Scripts />
       </body>
     </html>
