@@ -1,6 +1,7 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
 import { ClerkProvider, SignedIn, SignedOut } from '@clerk/tanstack-react-start'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { ReactNode } from 'react'
 
 import { TopNav } from '../components/layout/TopNav'
 import { ServerConnect } from '../components/auth/ServerConnect'
@@ -91,6 +92,18 @@ function CloudAuthenticatedApp() {
   )
 }
 
+// Conditional Clerk wrapper - wraps children in ClerkProvider when configured
+function MaybeClerkProvider({ children }: { children: ReactNode }) {
+  if (CLERK_PUBLISHABLE_KEY) {
+    return (
+      <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
+        {children}
+      </ClerkProvider>
+    )
+  }
+  return <>{children}</>
+}
+
 // Inner router that decides what to show based on server selection
 function ServerRouter() {
   const { server, isConnected, isLoading } = useServer()
@@ -104,6 +117,7 @@ function ServerRouter() {
   }
 
   // No server selected - show connection screen
+  // Note: ServerConnect is wrapped by MaybeClerkProvider in RootComponent
   if (!isConnected) {
     return <ServerConnect />
   }
@@ -113,21 +127,21 @@ function ServerRouter() {
     return <SelfHostedApp />
   }
 
-  // Cloud server - use Clerk auth (only if configured)
+  // Cloud server - use Clerk auth
   if (!CLERK_PUBLISHABLE_KEY) {
     // No Clerk configured but cloud selected - shouldn't happen, show connect
     return <ServerConnect />
   }
 
   return (
-    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
+    <>
       <SignedIn>
         <CloudAuthenticatedApp />
       </SignedIn>
       <SignedOut>
         <ServerConnect />
       </SignedOut>
-    </ClerkProvider>
+    </>
   )
 }
 
@@ -138,11 +152,13 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body>
-        <QueryClientProvider client={queryClient}>
-          <ServerProvider>
-            <ServerRouter />
-          </ServerProvider>
-        </QueryClientProvider>
+        <MaybeClerkProvider>
+          <QueryClientProvider client={queryClient}>
+            <ServerProvider>
+              <ServerRouter />
+            </ServerProvider>
+          </QueryClientProvider>
+        </MaybeClerkProvider>
         <Scripts />
       </body>
     </html>
