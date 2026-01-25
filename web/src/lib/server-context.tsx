@@ -166,6 +166,17 @@ export function ServerProvider({ children }: { children: ReactNode }) {
     const result = await testConnection(config)
     if (result.ok) {
       setServer(config)
+      // Also save to savedServers list for quick access later
+      setSavedServers(prev => {
+        const existing = prev.findIndex(s => s.url === config.url)
+        if (existing >= 0) {
+          // Update existing entry with new credentials
+          const updated = [...prev]
+          updated[existing] = config
+          return updated
+        }
+        return [...prev, config]
+      })
       return true
     }
     return false
