@@ -1,7 +1,7 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
-import { ClerkProvider, SignedIn, SignedOut } from '@clerk/tanstack-react-start'
+import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/tanstack-react-start'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { ReactNode } from 'react'
+import { ReactNode, useEffect } from 'react'
 
 import { TopNav } from '../components/layout/TopNav'
 import { ServerConnect } from '../components/auth/ServerConnect'
@@ -104,6 +104,22 @@ function MaybeClerkProvider({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+// Auto-connect to cloud when user is already signed in with Clerk
+function AutoConnectIfSignedIn() {
+  const { isSignedIn, isLoaded } = useAuth()
+  const { connect, isConnected } = useServer()
+
+  useEffect(() => {
+    // If user is signed in with Clerk but not connected to a server,
+    // automatically connect to cloud
+    if (isLoaded && isSignedIn && !isConnected) {
+      connect({ type: 'cloud' })
+    }
+  }, [isLoaded, isSignedIn, isConnected, connect])
+
+  return null
+}
+
 // Inner router that decides what to show based on server selection
 function ServerRouter() {
   const { server, isConnected, isLoading } = useServer()
@@ -119,7 +135,13 @@ function ServerRouter() {
   // No server selected - show connection screen
   // Note: ServerConnect is wrapped by MaybeClerkProvider in RootComponent
   if (!isConnected) {
-    return <ServerConnect />
+    return (
+      <>
+        {/* Auto-connect to cloud if already signed in */}
+        {CLERK_PUBLISHABLE_KEY && <AutoConnectIfSignedIn />}
+        <ServerConnect />
+      </>
+    )
   }
 
   // Self-hosted server - bypass Clerk, use mock provider
