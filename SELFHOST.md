@@ -68,7 +68,7 @@ Environment variables for the server:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTH_MODE` | `clerk` | Set to `none` for self-hosted |
+| `AUTH_MODE` | `clerk` | Set to `local` for self-hosted (API keys only) |
 | `DEFAULT_ORG_ID` | `org_default` | Org ID for all resources |
 | `DATABASE_URL` | required | PostgreSQL connection string |
 | `NATS_URL` | `nats://localhost:4222` | NATS server URL |

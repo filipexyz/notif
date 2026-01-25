@@ -12,8 +12,8 @@ type AuthMode string
 const (
 	// AuthModeClerk uses Clerk for dashboard auth + API keys for API access.
 	AuthModeClerk AuthMode = "clerk"
-	// AuthModeNone disables Clerk auth, uses only API keys. Good for self-hosting.
-	AuthModeNone AuthMode = "none"
+	// AuthModeLocal uses only API keys (no external auth provider). For self-hosting.
+	AuthModeLocal AuthMode = "local"
 )
 
 type Config struct {
@@ -49,7 +49,7 @@ type Config struct {
 
 // IsSelfHosted returns true if running in self-hosted mode (no Clerk).
 func (c *Config) IsSelfHosted() bool {
-	return c.AuthMode == AuthModeNone
+	return c.AuthMode == AuthModeLocal
 }
 
 func Load() (*Config, error) {
