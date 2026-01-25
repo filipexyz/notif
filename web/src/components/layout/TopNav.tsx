@@ -2,6 +2,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { UserButton } from "@clerk/tanstack-react-start";
 import { Badge } from "../ui/Badge";
 import { ProjectSelector } from "./ProjectSelector";
+import { useServer } from "../../lib/server-context";
 
 const navItems = [
   { href: "/", label: "Events" },
@@ -18,6 +19,7 @@ interface TopNavProps {
 
 export function TopNav({ dlqCount = 0 }: TopNavProps) {
   const location = useLocation();
+  const { server, disconnect } = useServer();
 
   return (
     <header className="h-12 border-b border-neutral-200 bg-white">
@@ -66,7 +68,16 @@ export function TopNav({ dlqCount = 0 }: TopNavProps) {
 
         {/* Right side */}
         <div className="flex items-center gap-3">
-          <UserButton afterSignOutUrl="/" />
+          {server?.type === 'self-hosted' ? (
+            <button
+              onClick={disconnect}
+              className="px-3 py-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors"
+            >
+              Disconnect
+            </button>
+          ) : (
+            <UserButton afterSignOutUrl="/" />
+          )}
         </div>
       </div>
     </header>
