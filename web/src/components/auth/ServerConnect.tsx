@@ -1,9 +1,34 @@
-import { useState, ReactNode } from 'react'
+import { useState, ReactNode, useCallback } from 'react'
 import { SignInButton } from '@clerk/tanstack-react-start'
 import { useServer, ServerConfig } from '../../lib/server-context'
 
 // Check if Clerk is configured
 const CLERK_AVAILABLE = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+// Modal wrapper component - defined outside to prevent re-renders
+function ModalWrapper({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-neutral-50 w-full max-w-md max-h-[90vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-600 z-10"
+          aria-label="Close"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// Fullscreen wrapper
+function FullscreenWrapper({ children }: { children: ReactNode }) {
+  return <div className="min-h-screen flex items-center justify-center bg-neutral-50">{children}</div>
+}
 
 interface ServerConnectProps {
   isModal?: boolean
@@ -75,33 +100,18 @@ export function ServerConnect({ isModal = false, onClose }: ServerConnectProps) 
     }
   }
 
-  // Wrapper for modal vs fullscreen
-  const Container = ({ children }: { children: ReactNode }) => {
+  // Helper to wrap content in modal or fullscreen
+  const wrap = (content: ReactNode) => {
     if (isModal) {
-      return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={handleClose}>
-          <div className="bg-neutral-50 w-full max-w-md max-h-[90vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={handleClose}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-600 z-10"
-              aria-label="Close"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            {children}
-          </div>
-        </div>
-      )
+      return <ModalWrapper onClose={handleClose}>{content}</ModalWrapper>
     }
-    return <div className="min-h-screen flex items-center justify-center bg-neutral-50">{children}</div>
+    return <FullscreenWrapper>{content}</FullscreenWrapper>
   }
 
-  // Server selection screen
-  if (mode === 'select') {
-    return (
-      <Container>
+  // Modal mode: skip selection, go straight to self-hosted (user is already logged in)
+  // Server selection screen (only for fullscreen/initial connection)
+  if (mode === 'select' && !isModal) {
+    return wrap(
         <div className="w-full max-w-md p-8">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-neutral-900 mb-2">notif.sh</h1>
@@ -172,14 +182,12 @@ export function ServerConnect({ isModal = false, onClose }: ServerConnectProps) 
             </div>
           )}
         </div>
-      </Container>
     )
   }
 
-  // Cloud sign-in
-  if (mode === 'cloud') {
-    return (
-      <Container>
+  // Cloud sign-in (only for fullscreen mode)
+  if (mode === 'cloud' && !isModal) {
+    return wrap(
         <div className="w-full max-w-md p-8">
           <button
             onClick={() => setMode('select')}
@@ -200,15 +208,13 @@ export function ServerConnect({ isModal = false, onClose }: ServerConnectProps) 
             </SignInButton>
           </div>
         </div>
-      </Container>
     )
   }
 
-  // Self-hosted connection
-  return (
-    <Container>
+  // Self-hosted connection (modal shows this directly, fullscreen shows after selection)
+  return wrap(
       <div className="w-full max-w-md p-8">
-        {CLERK_AVAILABLE && (
+        {CLERK_AVAILABLE && !isModal && (
           <button
             onClick={() => setMode('select')}
             className="text-neutral-500 hover:text-neutral-700 mb-6 flex items-center gap-1"
@@ -293,6 +299,5 @@ export function ServerConnect({ isModal = false, onClose }: ServerConnectProps) 
           </div>
         </div>
       </div>
-    </Container>
   )
 }
