@@ -4,8 +4,7 @@ import type { Terminal as TerminalType } from '@xterm/xterm'
 import type { FitAddon as FitAddonType } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useProject } from '../../lib/project-context'
-
-const WS_BASE = import.meta.env.VITE_API_URL?.replace('http', 'ws') || 'ws://localhost:8080'
+import { useServerUrl, useServerApiKey, useServer } from '../../lib/server-context'
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -32,6 +31,9 @@ export function WebTerminal({ className, onConnectionChange }: WebTerminalProps)
   const wsRef = useRef<WebSocket | null>(null)
   const { getToken } = useAuth()
   const { projectId, isHydrated } = useProject()
+  const { server } = useServer()
+  const serverUrl = useServerUrl()
+  const serverApiKey = useServerApiKey()
   const [state, setState] = useState<ConnectionState>('disconnected')
 
   const updateState = useCallback((newState: ConnectionState) => {
@@ -64,13 +66,25 @@ export function WebTerminal({ className, onConnectionChange }: WebTerminalProps)
     updateState('connecting')
 
     try {
-      const token = await getToken()
-      const url = new URL('/ws/terminal', WS_BASE)
+      // Build WebSocket URL from server URL
+      const wsBase = serverUrl.replace('http', 'ws')
+      const url = new URL('/ws/terminal', wsBase)
+      
+      // Use appropriate token based on server type
+      let token: string | undefined
+      if (server?.type === 'self-hosted' && serverApiKey) {
+        token = serverApiKey
+      } else {
+        token = await getToken() || undefined
+      }
+      
       if (token) {
         url.searchParams.set('token', token)
       }
-      // Include project ID for proper context
-      url.searchParams.set('project_id', projectId)
+      // Include project ID for proper context (cloud mode)
+      if (projectId) {
+        url.searchParams.set('project_id', projectId)
+      }
 
       const ws = new WebSocket(url.toString())
       wsRef.current = ws
