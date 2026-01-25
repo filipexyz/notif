@@ -1,7 +1,9 @@
 import { useAuth } from '@clerk/tanstack-react-start'
 import { useProjectId, useProject } from './project-context'
+import { useServer, useServerUrl, useServerApiKey } from './server-context'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+// Legacy env-based config (for backwards compatibility)
+const ENV_API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const ANONYMOUS_MODE = import.meta.env.VITE_ANONYMOUS_MODE === 'true'
 const DEV_API_KEY = import.meta.env.VITE_DEV_API_KEY
 
@@ -10,8 +12,15 @@ const DEV_API_KEY = import.meta.env.VITE_DEV_API_KEY
 // before a project is selected and hydration is complete
 export function useProjectReady() {
   const { selectedProject, isHydrated } = useProject()
-  // In anonymous mode with API key, project is derived from key so always ready
-  // But still need to wait for hydration
+  const { server, isConnected } = useServer()
+  
+  // Not connected to any server yet
+  if (!isConnected) return false
+  
+  // Self-hosted: project is derived from API key, always ready once connected
+  if (server?.type === 'self-hosted') return true
+  
+  // Cloud: need project selection
   if (ANONYMOUS_MODE && DEV_API_KEY) return isHydrated
   return isHydrated && selectedProject !== null
 }
@@ -30,8 +39,11 @@ export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
   token?: string,
-  projectId?: string | null
+  projectId?: string | null,
+  baseUrl?: string
 ): Promise<T> {
+  const apiBase = baseUrl || ENV_API_BASE
+  
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
@@ -46,7 +58,7 @@ export async function apiFetch<T>(
     headers['X-Project-ID'] = projectId
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${apiBase}${path}`, {
     ...options,
     headers: {
       ...headers,
@@ -66,18 +78,28 @@ export async function apiFetch<T>(
   return JSON.parse(text)
 }
 
-// Hook for authenticated requests with project context
+// Hook for authenticated requests with server and project context
 export function useApi() {
   const { getToken } = useAuth()
   const projectId = useProjectId()
+  const { server } = useServer()
+  const serverUrl = useServerUrl()
+  const serverApiKey = useServerApiKey()
 
   return async <T>(path: string, options?: RequestInit): Promise<T> => {
-    // In anonymous mode, use the dev API key (project derived from key)
+    // Self-hosted: use API key from server config
+    if (server?.type === 'self-hosted' && serverApiKey) {
+      return apiFetch<T>(path, options, serverApiKey, null, serverUrl)
+    }
+    
+    // Legacy anonymous mode (env-based)
     if (ANONYMOUS_MODE && DEV_API_KEY) {
       return apiFetch<T>(path, options, DEV_API_KEY, null)
     }
+    
+    // Cloud: use Clerk token
     const token = await getToken()
-    return apiFetch<T>(path, options, token || undefined, projectId)
+    return apiFetch<T>(path, options, token || undefined, projectId, serverUrl)
   }
 }
 

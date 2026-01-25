@@ -1,10 +1,11 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
-import { ClerkProvider, SignedIn, SignedOut, SignInButton } from '@clerk/tanstack-react-start'
+import { ClerkProvider, SignedIn, SignedOut } from '@clerk/tanstack-react-start'
 import { QueryClientProvider } from '@tanstack/react-query'
 
 import { TopNav } from '../components/layout/TopNav'
+import { ServerConnect } from '../components/auth/ServerConnect'
 import { queryClient } from '../lib/query'
-import { isAnonymousMode } from '../lib/api'
+import { ServerProvider, useServer } from '../lib/server-context'
 import { ProjectProvider } from '../lib/project-context'
 
 import appCss from '../styles.css?url'
@@ -58,50 +59,78 @@ function AppContent() {
   )
 }
 
+function SelfHostedApp() {
+  const { server } = useServer()
+  
+  return (
+    <ProjectProvider>
+      <AppContent />
+      <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-medium flex items-center gap-2">
+        <span>🏠</span>
+        <span>{server?.name || server?.url}</span>
+      </div>
+    </ProjectProvider>
+  )
+}
+
+function AuthenticatedApp() {
+  return (
+    <ProjectProvider>
+      <AppContent />
+    </ProjectProvider>
+  )
+}
+
+function ServerRouter() {
+  const { server, isConnected, isLoading } = useServer()
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="text-neutral-500">Loading...</div>
+      </div>
+    )
+  }
+
+  // No server selected - show connection screen
+  if (!isConnected) {
+    return <ServerConnect />
+  }
+
+  // Self-hosted server - bypass Clerk, use API key auth
+  if (server?.type === 'self-hosted') {
+    return <SelfHostedApp />
+  }
+
+  // Cloud server - use Clerk auth
+  return (
+    <>
+      <SignedIn>
+        <AuthenticatedApp />
+      </SignedIn>
+      <SignedOut>
+        <ServerConnect />
+      </SignedOut>
+    </>
+  )
+}
+
 function RootComponent() {
   return (
-    <ClerkProvider>
-      <QueryClientProvider client={queryClient}>
-        <html lang="en">
-          <head>
-            <HeadContent />
-          </head>
-          <body>
-            {isAnonymousMode ? (
-              // Anonymous mode: bypass Clerk auth for local development
-              <ProjectProvider>
-                <AppContent />
-                <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-warning text-warning-foreground text-xs font-medium">
-                  Anonymous Mode
-                </div>
-              </ProjectProvider>
-            ) : (
-              // Normal mode: require Clerk authentication
-              <>
-                <SignedIn>
-                  <ProjectProvider>
-                    <AppContent />
-                  </ProjectProvider>
-                </SignedIn>
-                <SignedOut>
-                  <div className="min-h-screen flex items-center justify-center bg-neutral-50">
-                    <div className="text-center">
-                      <h1 className="text-2xl font-semibold text-neutral-900 mb-2">notif.sh</h1>
-                      <p className="text-neutral-500 mb-6">Managed pub/sub event hub</p>
-                      <SignInButton mode="modal">
-                        <button className="px-6 py-2.5 bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors">
-                          Sign in
-                        </button>
-                      </SignInButton>
-                    </div>
-                  </div>
-                </SignedOut>
-              </>
-            )}
-            <Scripts />
-          </body>
-        </html>
-      </QueryClientProvider>
-    </ClerkProvider>
+    <html lang="en">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        <ClerkProvider>
+          <QueryClientProvider client={queryClient}>
+            <ServerProvider>
+              <ServerRouter />
+            </ServerProvider>
+          </QueryClientProvider>
+        </ClerkProvider>
+        <Scripts />
+      </body>
+    </html>
   )
 }

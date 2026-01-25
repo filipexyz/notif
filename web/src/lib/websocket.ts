@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useAuth } from '@clerk/tanstack-react-start'
+import { useServer, useServerUrl, useServerApiKey } from './server-context'
 import type { StoredEvent } from './types'
-
-const WS_BASE = import.meta.env.VITE_API_URL?.replace('http', 'ws') || 'ws://localhost:8080'
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error'
 
 export function useEventStream(onEvent: (event: StoredEvent) => void) {
   const { getToken } = useAuth()
+  const { server } = useServer()
+  const serverUrl = useServerUrl()
+  const serverApiKey = useServerApiKey()
+  
   const wsRef = useRef<WebSocket | null>(null)
   const [state, setState] = useState<ConnectionState>('disconnected')
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
@@ -20,8 +23,18 @@ export function useEventStream(onEvent: (event: StoredEvent) => void) {
     setState('connecting')
 
     try {
-      const token = await getToken()
-      const url = new URL('/ws', WS_BASE)
+      // Build WebSocket URL from server URL
+      const wsBase = serverUrl.replace('http', 'ws')
+      const url = new URL('/ws', wsBase)
+      
+      // Use appropriate token based on server type
+      let token: string | undefined
+      if (server?.type === 'self-hosted' && serverApiKey) {
+        token = serverApiKey
+      } else {
+        token = await getToken() || undefined
+      }
+      
       if (token) {
         url.searchParams.set('token', token)
       }
@@ -63,7 +76,7 @@ export function useEventStream(onEvent: (event: StoredEvent) => void) {
     } catch {
       setState('error')
     }
-  }, [getToken, onEvent])
+  }, [getToken, onEvent, server, serverUrl, serverApiKey])
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
