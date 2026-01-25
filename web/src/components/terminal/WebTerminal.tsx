@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useAuth } from '@clerk/tanstack-react-start'
+import { useAuth } from '../../lib/auth'
 import type { Terminal as TerminalType } from '@xterm/xterm'
 import type { FitAddon as FitAddonType } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'

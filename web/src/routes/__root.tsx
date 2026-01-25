@@ -1,14 +1,14 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
-import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/tanstack-react-start'
+import { ClerkProvider, SignedIn, SignedOut } from '@clerk/tanstack-react-start'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { ReactNode } from 'react'
 
 import { TopNav } from '../components/layout/TopNav'
 import { ServerConnect } from '../components/auth/ServerConnect'
 import { queryClient } from '../lib/query'
 import { ServerProvider, useServer } from '../lib/server-context'
 import { ProjectProvider } from '../lib/project-context'
-import { MockClerkProvider, MockSignedIn } from '../lib/clerk-mock'
+import { MockAuthProvider } from '../lib/clerk-mock'
+import { ClerkAuthProvider } from '../lib/clerk-auth-provider'
 
 import appCss from '../styles.css?url'
 
@@ -68,7 +68,7 @@ function SelfHostedApp() {
   const { server } = useServer()
   
   return (
-    <MockClerkProvider>
+    <MockAuthProvider>
       <ProjectProvider>
         <AppContent />
         <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-medium flex items-center gap-2">
@@ -76,15 +76,18 @@ function SelfHostedApp() {
           <span>{server?.name || server?.url}</span>
         </div>
       </ProjectProvider>
-    </MockClerkProvider>
+    </MockAuthProvider>
   )
 }
 
-function AuthenticatedApp() {
+// Cloud app with Clerk - needs ClerkAuthProvider bridge
+function CloudAuthenticatedApp() {
   return (
-    <ProjectProvider>
-      <AppContent />
-    </ProjectProvider>
+    <ClerkAuthProvider>
+      <ProjectProvider>
+        <AppContent />
+      </ProjectProvider>
+    </ClerkAuthProvider>
   )
 }
 
@@ -119,7 +122,7 @@ function ServerRouter() {
   return (
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
       <SignedIn>
-        <AuthenticatedApp />
+        <CloudAuthenticatedApp />
       </SignedIn>
       <SignedOut>
         <ServerConnect />

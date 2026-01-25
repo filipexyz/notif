@@ -1,29 +1,37 @@
-// Re-export useAuth from Clerk or mock based on availability
+// Universal auth context for both cloud and self-hosted modes
 // Components should import useAuth from here, not directly from Clerk
 
-import { useAuth as useClerkAuth } from '@clerk/tanstack-react-start'
-import { useMockAuth } from './clerk-mock'
-import { useServer } from './server-context'
+import { createContext, useContext } from 'react'
+
+interface AuthContextValue {
+  isLoaded: boolean
+  isSignedIn: boolean
+  userId: string | null
+  sessionId: string | null
+  orgId: string | null
+  getToken: () => Promise<string | null>
+  signOut: () => Promise<void>
+}
+
+// Default noop auth for self-hosted mode
+const defaultAuth: AuthContextValue = {
+  isLoaded: true,
+  isSignedIn: true, // Treat self-hosted as "signed in" via API key
+  userId: 'self-hosted-user',
+  sessionId: 'self-hosted-session',
+  orgId: 'self-hosted-org',
+  getToken: async () => null,
+  signOut: async () => {},
+}
+
+export const AuthContext = createContext<AuthContextValue>(defaultAuth)
 
 /**
  * Universal useAuth hook that works in both cloud and self-hosted modes.
- * - In cloud mode: uses real Clerk auth
- * - In self-hosted mode: uses mock auth (returns noop implementations)
- * 
- * Note: This must be called within either ClerkProvider or MockClerkProvider
+ * The actual implementation is provided by the appropriate provider:
+ * - ClerkAuthProvider (cloud mode) - wraps Clerk's useAuth
+ * - MockAuthProvider (self-hosted) - provides noop implementations
  */
 export function useAuth() {
-  const { server } = useServer()
-  
-  // In self-hosted mode, we're inside MockClerkProvider
-  // In cloud mode, we're inside ClerkProvider
-  // Both provide their respective useAuth implementations
-  
-  if (server?.type === 'self-hosted') {
-    return useMockAuth()
-  }
-  
-  // Cloud mode - use real Clerk auth
-  // This is safe because we're wrapped in ClerkProvider
-  return useClerkAuth()
+  return useContext(AuthContext)
 }
