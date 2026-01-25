@@ -38,7 +38,7 @@ export function ServerConnect() {
     })
     
     setTesting(false)
-    if (result.success) {
+    if (result.ok) {
       setTestSuccess(true)
     } else {
       setError(result.error || 'Connection failed')
