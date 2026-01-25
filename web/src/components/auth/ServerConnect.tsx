@@ -5,8 +5,13 @@ import { useServer, ServerConfig } from '../../lib/server-context'
 // Check if Clerk is configured
 const CLERK_AVAILABLE = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
-export function ServerConnect() {
-  const { connect, testConnection, savedServers, isLoading, clearManualDisconnect } = useServer()
+interface ServerConnectProps {
+  isModal?: boolean
+  onClose?: () => void
+}
+
+export function ServerConnect({ isModal = false, onClose }: ServerConnectProps) {
+  const { connect, testConnection, savedServers, isLoading, clearManualDisconnect, closeServerModal } = useServer()
   // If Clerk not configured, skip to self-hosted directly
   const [mode, setMode] = useState<'select' | 'cloud' | 'self-hosted'>(
     CLERK_AVAILABLE ? 'select' : 'self-hosted'
@@ -45,24 +50,58 @@ export function ServerConnect() {
     }
   }
 
-  const handleConnect = () => {
+  const handleClose = () => {
+    if (onClose) onClose()
+    else closeServerModal()
+  }
+
+  const handleConnect = async () => {
     const config: ServerConfig = {
       type: 'self-hosted',
       url: serverUrl,
       apiKey,
       name: serverName || undefined,
     }
-    connect(config)
+    const success = await connect(config)
+    if (success && isModal) {
+      handleClose()
+    }
   }
 
-  const handleConnectSaved = (server: ServerConfig) => {
-    connect(server)
+  const handleConnectSaved = async (server: ServerConfig) => {
+    const success = await connect(server)
+    if (success && isModal) {
+      handleClose()
+    }
+  }
+
+  // Wrapper for modal vs fullscreen
+  const Container = ({ children }: { children: ReactNode }) => {
+    if (isModal) {
+      return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={handleClose}>
+          <div className="bg-neutral-50 w-full max-w-md max-h-[90vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={handleClose}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-600 z-10"
+              aria-label="Close"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            {children}
+          </div>
+        </div>
+      )
+    }
+    return <div className="min-h-screen flex items-center justify-center bg-neutral-50">{children}</div>
   }
 
   // Server selection screen
   if (mode === 'select') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+      <Container>
         <div className="w-full max-w-md p-8">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-neutral-900 mb-2">notif.sh</h1>
@@ -133,14 +172,14 @@ export function ServerConnect() {
             </div>
           )}
         </div>
-      </div>
+      </Container>
     )
   }
 
   // Cloud sign-in
   if (mode === 'cloud') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+      <Container>
         <div className="w-full max-w-md p-8">
           <button
             onClick={() => setMode('select')}
@@ -161,13 +200,13 @@ export function ServerConnect() {
             </SignInButton>
           </div>
         </div>
-      </div>
+      </Container>
     )
   }
 
   // Self-hosted connection
   return (
-    <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+    <Container>
       <div className="w-full max-w-md p-8">
         {CLERK_AVAILABLE && (
           <button
@@ -254,6 +293,6 @@ export function ServerConnect() {
           </div>
         </div>
       </div>
-    </div>
+    </Container>
   )
 }
