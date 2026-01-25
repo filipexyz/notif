@@ -27,7 +27,7 @@ type AuthContext struct {
 
 // UnifiedAuth creates middleware that accepts both API key and Clerk auth.
 // API key takes precedence if both are present.
-// In self-hosted mode (AUTH_MODE=none), Clerk auth is skipped.
+// In self-hosted mode (AUTH_MODE=local), Clerk auth is skipped.
 func UnifiedAuth(queries *db.Queries, cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +126,7 @@ func UnifiedAuth(queries *db.Queries, cfg *config.Config) func(http.Handler) htt
 
 // RequireClerkAuth returns middleware that requires Clerk auth (not API key).
 // Use this for endpoints like API key management that shouldn't allow API key auth.
-// In self-hosted mode (AUTH_MODE=none), this allows API key auth instead.
+// In self-hosted mode (AUTH_MODE=local), this allows API key auth instead.
 func RequireClerkAuth(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

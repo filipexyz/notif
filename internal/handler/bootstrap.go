@@ -32,13 +32,13 @@ type BootstrapResponse struct {
 
 // Bootstrap creates the initial API key for a self-hosted instance.
 // This endpoint only works when:
-// 1. AUTH_MODE=none (self-hosted mode)
+// 1. AUTH_MODE=local (self-hosted mode)
 // 2. No API keys exist in the database yet
 func (h *BootstrapHandler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 	// Only allow in self-hosted mode
 	if !h.cfg.IsSelfHosted() {
 		writeJSON(w, http.StatusForbidden, map[string]string{
-			"error": "bootstrap only available in self-hosted mode (AUTH_MODE=none)",
+			"error": "bootstrap only available in self-hosted mode (AUTH_MODE=local)",
 		})
 		return
 	}

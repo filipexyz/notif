@@ -32,11 +32,11 @@ type Config struct {
 	LogFormat string `env:"LOG_FORMAT" envDefault:"json"`
 
 	// Authentication
-	// AUTH_MODE: "clerk" (default) or "none" (self-hosted, API keys only)
+	// AUTH_MODE: "clerk" (default) or "local" (self-hosted, API keys only)
 	AuthMode       AuthMode `env:"AUTH_MODE" envDefault:"clerk"`
 	ClerkSecretKey string   `env:"CLERK_SECRET_KEY"`
 
-	// Self-hosted mode settings (used when AUTH_MODE=none)
+	// Self-hosted mode settings (used when AUTH_MODE=local)
 	// Default org ID for self-hosted single-tenant mode
 	DefaultOrgID string `env:"DEFAULT_ORG_ID" envDefault:"org_default"`
 

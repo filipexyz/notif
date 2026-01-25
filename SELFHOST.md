@@ -123,7 +123,7 @@ services:
   notif:
     image: ghcr.io/filipexyz/notif:latest
     environment:
-      AUTH_MODE: "none"
+      AUTH_MODE: "local"
       DATABASE_URL: "postgres://user:pass@your-db:5432/notif?sslmode=require"
       NATS_URL: "nats://your-nats:4222"
       CORS_ORIGINS: "https://app.yourdomain.com"
