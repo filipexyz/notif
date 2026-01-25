@@ -31,7 +31,11 @@ export function ServerConnect() {
     setError(null)
     setTestSuccess(false)
 
-    const result = await testConnection(serverUrl, apiKey)
+    const result = await testConnection({
+      type: 'self-hosted',
+      url: serverUrl,
+      apiKey,
+    })
     
     setTesting(false)
     if (result.success) {
