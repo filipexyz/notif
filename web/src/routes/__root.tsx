@@ -1,5 +1,5 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
-import { ClerkProvider, SignedIn, SignedOut } from '@clerk/tanstack-react-start'
+import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/tanstack-react-start'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactNode } from 'react'
 
@@ -8,20 +8,12 @@ import { ServerConnect } from '../components/auth/ServerConnect'
 import { queryClient } from '../lib/query'
 import { ServerProvider, useServer } from '../lib/server-context'
 import { ProjectProvider } from '../lib/project-context'
+import { MockClerkProvider, MockSignedIn } from '../lib/clerk-mock'
 
 import appCss from '../styles.css?url'
 
 // Clerk publishable key - optional for self-hosted only mode
 const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-
-// Conditional Clerk provider - only wrap if key is available
-function MaybeClerkProvider({ children }: { children: ReactNode }) {
-  if (!CLERK_PUBLISHABLE_KEY) {
-    // No Clerk key - self-hosted only mode
-    return <>{children}</>
-  }
-  return <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>{children}</ClerkProvider>
-}
 
 export const Route = createRootRoute({
   head: () => ({
@@ -76,13 +68,15 @@ function SelfHostedApp() {
   const { server } = useServer()
   
   return (
-    <ProjectProvider>
-      <AppContent />
-      <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-medium flex items-center gap-2">
-        <span>🏠</span>
-        <span>{server?.name || server?.url}</span>
-      </div>
-    </ProjectProvider>
+    <MockClerkProvider>
+      <ProjectProvider>
+        <AppContent />
+        <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-medium flex items-center gap-2">
+          <span>🏠</span>
+          <span>{server?.name || server?.url}</span>
+        </div>
+      </ProjectProvider>
+    </MockClerkProvider>
   )
 }
 
@@ -94,6 +88,7 @@ function AuthenticatedApp() {
   )
 }
 
+// Inner router that decides what to show based on server selection
 function ServerRouter() {
   const { server, isConnected, isLoading } = useServer()
 
@@ -110,26 +105,26 @@ function ServerRouter() {
     return <ServerConnect />
   }
 
-  // Self-hosted server - bypass Clerk, use API key auth
+  // Self-hosted server - bypass Clerk, use mock provider
   if (server?.type === 'self-hosted') {
     return <SelfHostedApp />
   }
 
-  // Cloud server - use Clerk auth (only if Clerk is configured)
+  // Cloud server - use Clerk auth (only if configured)
   if (!CLERK_PUBLISHABLE_KEY) {
-    // No Clerk configured - show server connect (self-hosted only mode)
+    // No Clerk configured but cloud selected - shouldn't happen, show connect
     return <ServerConnect />
   }
 
   return (
-    <>
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
       <SignedIn>
         <AuthenticatedApp />
       </SignedIn>
       <SignedOut>
         <ServerConnect />
       </SignedOut>
-    </>
+    </ClerkProvider>
   )
 }
 
@@ -140,13 +135,11 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body>
-        <MaybeClerkProvider>
-          <QueryClientProvider client={queryClient}>
-            <ServerProvider>
-              <ServerRouter />
-            </ServerProvider>
-          </QueryClientProvider>
-        </MaybeClerkProvider>
+        <QueryClientProvider client={queryClient}>
+          <ServerProvider>
+            <ServerRouter />
+          </ServerProvider>
+        </QueryClientProvider>
         <Scripts />
       </body>
     </html>

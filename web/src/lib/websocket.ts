@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useAuth } from '@clerk/tanstack-react-start'
+import { useAuth } from './auth'
 import { useServer, useServerUrl, useServerApiKey } from './server-context'
 import type { StoredEvent } from './types'
 

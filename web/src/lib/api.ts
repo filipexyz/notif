@@ -1,4 +1,4 @@
-import { useAuth } from '@clerk/tanstack-react-start'
+import { useAuth } from './auth'
 import { useProjectId, useProject } from './project-context'
 import { useServer, useServerUrl, useServerApiKey } from './server-context'
 
