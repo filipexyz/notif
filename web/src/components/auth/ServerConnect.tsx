@@ -149,7 +149,7 @@ export function ServerConnect() {
             
             <SignInButton mode="modal">
               <button className="w-full px-6 py-3 bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors">
-                Sign in with Clerk
+                Sign In
               </button>
             </SignInButton>
           </div>
