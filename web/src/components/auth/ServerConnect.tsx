@@ -1,25 +1,9 @@
-import { useState, lazy, Suspense, ReactNode } from 'react'
+import { useState, ReactNode } from 'react'
+import { SignInButton } from '@clerk/tanstack-react-start'
 import { useServer, ServerConfig } from '../../lib/server-context'
 
 // Check if Clerk is configured
 const CLERK_AVAILABLE = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-
-// Lazy load SignInButton only when Clerk is available
-const ClerkSignInButton = CLERK_AVAILABLE
-  ? lazy(() => import('@clerk/tanstack-react-start').then(m => ({ default: m.SignInButton })))
-  : null
-
-// Wrapper that only renders SignInButton when Clerk is available
-function SignInButtonWrapper({ children }: { children: ReactNode }) {
-  if (!ClerkSignInButton) {
-    return null
-  }
-  return (
-    <Suspense fallback={<div className="w-full px-6 py-3 bg-neutral-200 text-neutral-500">Loading...</div>}>
-      <ClerkSignInButton mode="modal">{children}</ClerkSignInButton>
-    </Suspense>
-  )
-}
 
 export function ServerConnect() {
   const { connect, testConnection, savedServers, isLoading } = useServer()
@@ -69,10 +53,6 @@ export function ServerConnect() {
 
   const handleConnectSaved = (server: ServerConfig) => {
     connect(server)
-  }
-
-  const handleConnectCloud = () => {
-    connect({ type: 'cloud' })
   }
 
   // Server selection screen
@@ -167,11 +147,11 @@ export function ServerConnect() {
             <h1 className="text-2xl font-semibold text-neutral-900 mb-2">notif.sh Cloud</h1>
             <p className="text-neutral-500 mb-8">Sign in to access your events and webhooks</p>
             
-            <SignInButtonWrapper>
+            <SignInButton mode="modal">
               <button className="w-full px-6 py-3 bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors">
                 Sign in with Clerk
               </button>
-            </SignInButtonWrapper>
+            </SignInButton>
           </div>
         </div>
       </div>
@@ -182,12 +162,14 @@ export function ServerConnect() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50">
       <div className="w-full max-w-md p-8">
-        <button
-          onClick={() => setMode('select')}
-          className="text-neutral-500 hover:text-neutral-700 mb-6 flex items-center gap-1"
-        >
-          ← Back
-        </button>
+        {CLERK_AVAILABLE && (
+          <button
+            onClick={() => setMode('select')}
+            className="text-neutral-500 hover:text-neutral-700 mb-6 flex items-center gap-1"
+          >
+            ← Back
+          </button>
+        )}
 
         <div className="text-center mb-8">
           <div className="text-4xl mb-4">🏠</div>
