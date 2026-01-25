@@ -1,13 +1,19 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
-import { ClerkProvider, SignedIn, SignedOut, SignInButton } from '@clerk/tanstack-react-start'
+import { ClerkProvider, SignedIn, SignedOut } from '@clerk/tanstack-react-start'
 import { QueryClientProvider } from '@tanstack/react-query'
 
 import { TopNav } from '../components/layout/TopNav'
+import { ServerConnect } from '../components/auth/ServerConnect'
 import { queryClient } from '../lib/query'
-import { isAnonymousMode } from '../lib/api'
+import { ServerProvider, useServer } from '../lib/server-context'
 import { ProjectProvider } from '../lib/project-context'
+import { MockAuthProvider } from '../lib/clerk-mock'
+import { ClerkAuthProvider } from '../lib/clerk-auth-provider'
 
 import appCss from '../styles.css?url'
+
+// Clerk publishable key - optional for self-hosted only mode
+const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 export const Route = createRootRoute({
   head: () => ({
@@ -58,50 +64,87 @@ function AppContent() {
   )
 }
 
+function SelfHostedApp() {
+  const { server } = useServer()
+  
+  return (
+    <MockAuthProvider>
+      <ProjectProvider>
+        <AppContent />
+        <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-medium flex items-center gap-2">
+          <span>🏠</span>
+          <span>{server?.name || server?.url}</span>
+        </div>
+      </ProjectProvider>
+    </MockAuthProvider>
+  )
+}
+
+// Cloud app with Clerk - needs ClerkAuthProvider bridge
+function CloudAuthenticatedApp() {
+  return (
+    <ClerkAuthProvider>
+      <ProjectProvider>
+        <AppContent />
+      </ProjectProvider>
+    </ClerkAuthProvider>
+  )
+}
+
+// Inner router that decides what to show based on server selection
+function ServerRouter() {
+  const { server, isConnected, isLoading } = useServer()
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="text-neutral-500">Loading...</div>
+      </div>
+    )
+  }
+
+  // No server selected - show connection screen
+  if (!isConnected) {
+    return <ServerConnect />
+  }
+
+  // Self-hosted server - bypass Clerk, use mock provider
+  if (server?.type === 'self-hosted') {
+    return <SelfHostedApp />
+  }
+
+  // Cloud server - use Clerk auth (only if configured)
+  if (!CLERK_PUBLISHABLE_KEY) {
+    // No Clerk configured but cloud selected - shouldn't happen, show connect
+    return <ServerConnect />
+  }
+
+  return (
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
+      <SignedIn>
+        <CloudAuthenticatedApp />
+      </SignedIn>
+      <SignedOut>
+        <ServerConnect />
+      </SignedOut>
+    </ClerkProvider>
+  )
+}
+
 function RootComponent() {
   return (
-    <ClerkProvider>
-      <QueryClientProvider client={queryClient}>
-        <html lang="en">
-          <head>
-            <HeadContent />
-          </head>
-          <body>
-            {isAnonymousMode ? (
-              // Anonymous mode: bypass Clerk auth for local development
-              <ProjectProvider>
-                <AppContent />
-                <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-warning text-warning-foreground text-xs font-medium">
-                  Anonymous Mode
-                </div>
-              </ProjectProvider>
-            ) : (
-              // Normal mode: require Clerk authentication
-              <>
-                <SignedIn>
-                  <ProjectProvider>
-                    <AppContent />
-                  </ProjectProvider>
-                </SignedIn>
-                <SignedOut>
-                  <div className="min-h-screen flex items-center justify-center bg-neutral-50">
-                    <div className="text-center">
-                      <h1 className="text-2xl font-semibold text-neutral-900 mb-2">notif.sh</h1>
-                      <p className="text-neutral-500 mb-6">Managed pub/sub event hub</p>
-                      <SignInButton mode="modal">
-                        <button className="px-6 py-2.5 bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors">
-                          Sign in
-                        </button>
-                      </SignInButton>
-                    </div>
-                  </div>
-                </SignedOut>
-              </>
-            )}
-            <Scripts />
-          </body>
-        </html>
-      </QueryClientProvider>
-    </ClerkProvider>
+    <html lang="en">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        <QueryClientProvider client={queryClient}>
+          <ServerProvider>
+            <ServerRouter />
+          </ServerProvider>
+        </QueryClientProvider>
+        <Scripts />
+      </body>
+    </html>
   )
 }
