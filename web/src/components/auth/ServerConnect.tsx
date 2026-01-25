@@ -1,5 +1,5 @@
-import { useState, ReactNode, useCallback } from 'react'
-import { SignInButton } from '@clerk/tanstack-react-start'
+import { useState, ReactNode } from 'react'
+import { SignInButton, useAuth } from '@clerk/tanstack-react-start'
 import { useServer, ServerConfig } from '../../lib/server-context'
 
 // Check if Clerk is configured
@@ -37,9 +37,14 @@ interface ServerConnectProps {
 
 export function ServerConnect({ isModal = false, onClose }: ServerConnectProps) {
   const { connect, testConnection, savedServers, isLoading, clearManualDisconnect, closeServerModal } = useServer()
+  // Get auth state if Clerk is available
+  const auth = CLERK_AVAILABLE ? useAuth() : { isSignedIn: false, isLoaded: true }
+  const { isSignedIn, isLoaded: isAuthLoaded } = auth
+  
   // If Clerk not configured, skip to self-hosted directly
+  // If modal mode, go directly to self-hosted (user is already logged in)
   const [mode, setMode] = useState<'select' | 'cloud' | 'self-hosted'>(
-    CLERK_AVAILABLE ? 'select' : 'self-hosted'
+    !CLERK_AVAILABLE ? 'self-hosted' : (isModal ? 'self-hosted' : 'select')
   )
   const [serverUrl, setServerUrl] = useState('http://localhost:8080')
   const [apiKey, setApiKey] = useState('')
@@ -48,10 +53,29 @@ export function ServerConnect({ isModal = false, onClose }: ServerConnectProps) 
   const [error, setError] = useState<string | null>(null)
   const [testSuccess, setTestSuccess] = useState(false)
 
-  if (isLoading) {
+  if (isLoading || !isAuthLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50">
         <div className="text-neutral-500">Loading...</div>
+      </div>
+    )
+  }
+
+  // If Clerk is configured but user is not signed in, show sign in first
+  // (Skip this for modal mode since user must be logged in to open it)
+  if (CLERK_AVAILABLE && !isSignedIn && !isModal) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="w-full max-w-md p-8 text-center">
+          <h1 className="text-3xl font-bold text-neutral-900 mb-2">notif.sh</h1>
+          <p className="text-neutral-500 mb-8">Sign in to get started</p>
+          
+          <SignInButton mode="modal">
+            <button className="w-full px-6 py-3 bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors">
+              Sign In
+            </button>
+          </SignInButton>
+        </div>
       </div>
     )
   }
