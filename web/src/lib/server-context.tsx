@@ -143,6 +143,16 @@ export function ServerProvider({ children }: { children: ReactNode }) {
   }
 
   const connect = async (config: ServerConfig): Promise<boolean> => {
+    // For cloud mode, use default URL and skip connection test (Clerk handles auth)
+    if (config.type === 'cloud') {
+      setServer({
+        ...DEFAULT_CLOUD_SERVER,
+        ...config,
+      })
+      return true
+    }
+    
+    // For self-hosted, test connection first
     const result = await testConnection(config)
     if (result.ok) {
       setServer(config)
