@@ -2,6 +2,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { UserButton } from "@clerk/tanstack-react-start";
 import { Badge } from "../ui/Badge";
 import { ProjectSelector } from "./ProjectSelector";
+import { ServerSwitcher } from "./ServerSwitcher";
 import { useServer } from "../../lib/server-context";
 
 const navItems = [
@@ -19,7 +20,7 @@ interface TopNavProps {
 
 export function TopNav({ dlqCount = 0 }: TopNavProps) {
   const location = useLocation();
-  const { server, disconnect } = useServer();
+  const { server } = useServer();
 
   return (
     <header className="h-12 border-b border-neutral-200 bg-white">
@@ -31,6 +32,11 @@ export function TopNav({ dlqCount = 0 }: TopNavProps) {
               notif.sh
             </Link>
             <Badge className="bg-primary-100 text-primary-700">beta</Badge>
+          </div>
+
+          {/* Server Switcher */}
+          <div className="border-l border-neutral-200 pl-4">
+            <ServerSwitcher />
           </div>
 
           {/* Project Selector */}
@@ -69,12 +75,9 @@ export function TopNav({ dlqCount = 0 }: TopNavProps) {
         {/* Right side */}
         <div className="flex items-center gap-3">
           {server?.type === 'self-hosted' ? (
-            <button
-              onClick={disconnect}
-              className="px-3 py-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors"
-            >
-              Disconnect
-            </button>
+            <div className="flex items-center gap-2 text-sm text-neutral-500">
+              <span>API Key</span>
+            </div>
           ) : (
             <UserButton afterSignOutUrl="/" />
           )}
