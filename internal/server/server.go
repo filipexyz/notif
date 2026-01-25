@@ -33,12 +33,21 @@ type Server struct {
 
 // New creates a new Server.
 func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
-	// Initialize Clerk for dashboard authentication
-	if cfg.ClerkSecretKey != "" {
-		clerk.SetKey(cfg.ClerkSecretKey)
-		slog.Info("Clerk authentication enabled for dashboard routes")
+	// Log auth mode
+	if cfg.IsSelfHosted() {
+		slog.Info("Running in self-hosted mode",
+			"auth_mode", string(cfg.AuthMode),
+			"default_org", cfg.DefaultOrgID,
+		)
+		slog.Info("Bootstrap your instance: POST /api/v1/bootstrap")
 	} else {
-		slog.Warn("CLERK_SECRET_KEY not set - dashboard routes will not work")
+		// Initialize Clerk for dashboard authentication
+		if cfg.ClerkSecretKey != "" {
+			clerk.SetKey(cfg.ClerkSecretKey)
+			slog.Info("Clerk authentication enabled for dashboard routes")
+		} else {
+			slog.Warn("CLERK_SECRET_KEY not set - dashboard routes will not work")
+		}
 	}
 
 	hub := websocket.NewHub()

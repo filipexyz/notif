@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/clerk/clerk-sdk-go/v2"
+	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/domain"
 	"github.com/google/uuid"
@@ -26,7 +27,8 @@ type AuthContext struct {
 
 // UnifiedAuth creates middleware that accepts both API key and Clerk auth.
 // API key takes precedence if both are present.
-func UnifiedAuth(queries *db.Queries) func(http.Handler) http.Handler {
+// In self-hosted mode (AUTH_MODE=none), Clerk auth is skipped.
+func UnifiedAuth(queries *db.Queries, cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var authCtx *AuthContext
@@ -63,7 +65,14 @@ func UnifiedAuth(queries *db.Queries) func(http.Handler) http.Handler {
 				return
 			}
 
-			// 2. Try Clerk session
+			// 2. In self-hosted mode, skip Clerk entirely
+			if cfg.IsSelfHosted() {
+				// No API key provided in self-hosted mode
+				writeError(w, http.StatusUnauthorized, "api key required")
+				return
+			}
+
+			// 3. Try Clerk session (only in clerk mode)
 			claims, ok := clerk.SessionClaimsFromContext(r.Context())
 			if ok && claims.Subject != "" {
 				userID := claims.Subject
@@ -109,7 +118,7 @@ func UnifiedAuth(queries *db.Queries) func(http.Handler) http.Handler {
 				return
 			}
 
-			// 3. No valid auth
+			// 4. No valid auth
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 		})
 	}
@@ -117,11 +126,28 @@ func UnifiedAuth(queries *db.Queries) func(http.Handler) http.Handler {
 
 // RequireClerkAuth returns middleware that requires Clerk auth (not API key).
 // Use this for endpoints like API key management that shouldn't allow API key auth.
-func RequireClerkAuth() func(http.Handler) http.Handler {
+// In self-hosted mode (AUTH_MODE=none), this allows API key auth instead.
+func RequireClerkAuth(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authCtx := GetAuthContext(r.Context())
-			if authCtx == nil || authCtx.UserID == nil {
+			if authCtx == nil {
+				writeError(w, http.StatusForbidden, "authentication required")
+				return
+			}
+
+			// In self-hosted mode, allow API key auth for dashboard routes
+			if cfg.IsSelfHosted() {
+				if authCtx.APIKeyID != nil {
+					next.ServeHTTP(w, r)
+					return
+				}
+				writeError(w, http.StatusForbidden, "api key required")
+				return
+			}
+
+			// In clerk mode, require actual Clerk auth
+			if authCtx.UserID == nil {
 				writeError(w, http.StatusForbidden, "clerk authentication required")
 				return
 			}

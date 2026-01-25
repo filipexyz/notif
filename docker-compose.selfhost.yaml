@@ -1,0 +1,67 @@
+# Self-hosted notif.sh
+# 
+# Quick start:
+#   docker compose -f docker-compose.selfhost.yaml up -d
+#   curl -X POST http://localhost:8080/api/v1/bootstrap
+#
+# This will return your API key. Save it!
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    command:
+      - "--jetstream"
+      - "--store_dir=/data"
+      - "--http_port=8222"
+    ports:
+      - "4222:4222"
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: notif
+      POSTGRES_PASSWORD: notif_selfhost
+      POSTGRES_DB: notif
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notif"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  notif:
+    image: ghcr.io/filipexyz/notif:latest
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "postgres://notif:notif_selfhost@postgres:5432/notif?sslmode=disable"
+      NATS_URL: "nats://nats:4222"
+      # Self-hosted mode: no Clerk, API keys only
+      AUTH_MODE: "none"
+      DEFAULT_ORG_ID: "org_selfhosted"
+      LOG_LEVEL: "info"
+      LOG_FORMAT: "text"
+      # Allow all origins for self-hosted (customize as needed)
+      CORS_ORIGINS: "*"
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  nats_data:
+  postgres_data:

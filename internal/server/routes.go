@@ -38,12 +38,17 @@ func (s *Server) routes() http.Handler {
 		MaxAge:           300,
 	}))
 
+	queries := db.New(s.db)
+
 	// Health checks (no auth)
 	healthHandler := handler.NewHealthHandler(s.db, s.nats)
 	r.Get("/health", healthHandler.Health)
 	r.Get("/ready", healthHandler.Ready)
 
-	queries := db.New(s.db)
+	// Bootstrap endpoints for self-hosted setup (no auth required)
+	bootstrapHandler := handler.NewBootstrapHandler(queries, s.cfg)
+	r.Get("/api/v1/bootstrap/status", bootstrapHandler.Status)
+	r.Post("/api/v1/bootstrap", bootstrapHandler.Bootstrap)
 
 	// ================================================================
 	// API v1 ROUTES
@@ -73,20 +78,20 @@ func (s *Server) routes() http.Handler {
 
 	// WebSocket endpoint at root (no /api/v1 prefix for WS)
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.UnifiedAuth(queries))
+		r.Use(middleware.UnifiedAuth(queries, s.cfg))
 		r.Get("/ws", subscribeHandler.Subscribe)
 	})
 
 	// Terminal WebSocket endpoint (requires Clerk JWT, not API key)
 	terminalHandler := handler.NewTerminalHandler(s.terminalManager)
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.UnifiedAuth(queries))
-		r.Use(middleware.RequireClerkAuth())
+		r.Use(middleware.UnifiedAuth(queries, s.cfg))
+		r.Use(middleware.RequireClerkAuth(s.cfg))
 		r.Get("/ws/terminal", terminalHandler.HandleWS)
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(middleware.UnifiedAuth(queries))
+		r.Use(middleware.UnifiedAuth(queries, s.cfg))
 
 		// Events
 		r.Post("/emit", emitHandler.Emit)
@@ -138,8 +143,9 @@ func (s *Server) routes() http.Handler {
 		r.Get("/stats/schedules", schedulesHandler.Stats)
 
 		// Dashboard routes (requires Clerk auth, not API key)
+		// In self-hosted mode, allows API key auth instead
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireClerkAuth())
+			r.Use(middleware.RequireClerkAuth(s.cfg))
 
 			// API Keys
 			r.Post("/api-keys", apiKeyHandler.Create)
