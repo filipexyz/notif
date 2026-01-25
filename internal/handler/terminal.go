@@ -49,22 +49,35 @@ func NewTerminalHandler(manager *terminal.Manager) *TerminalHandler {
 
 // HandleWS handles WebSocket connections for terminal sessions.
 func (h *TerminalHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
-	// Get auth context (must be Clerk JWT, not API key)
+	// Get auth context (accepts both Clerk JWT and API key for self-hosted)
 	authCtx := middleware.GetAuthContext(r.Context())
-	if authCtx == nil || authCtx.UserID == nil {
+	if authCtx == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	// Must have either UserID (JWT) or APIKeyID (self-hosted)
+	if authCtx.UserID == nil && authCtx.APIKeyID == nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Get JWT from query param (passed by frontend)
-	jwt := r.URL.Query().Get("token")
-	if jwt == "" {
+	// Get token from query param (JWT for cloud, API key for self-hosted)
+	token := r.URL.Query().Get("token")
+	if token == "" {
 		http.Error(w, "missing token", http.StatusBadRequest)
 		return
 	}
 
-	// Check max sessions per user
-	if h.manager.UserSessionCount(*authCtx.UserID) >= maxSessionsPerUser {
+	// Get user/key identifier for session tracking
+	var sessionOwner string
+	if authCtx.UserID != nil {
+		sessionOwner = *authCtx.UserID
+	} else if authCtx.APIKeyID != nil {
+		sessionOwner = authCtx.APIKeyID.String()
+	}
+
+	// Check max sessions per user/key
+	if h.manager.UserSessionCount(sessionOwner) >= maxSessionsPerUser {
 		http.Error(w, "max sessions reached", http.StatusTooManyRequests)
 		return
 	}
@@ -76,10 +89,10 @@ func (h *TerminalHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("terminal websocket connected", "user_id", *authCtx.UserID, "project_id", authCtx.ProjectID)
+	slog.Info("terminal websocket connected", "session_owner", sessionOwner, "project_id", authCtx.ProjectID)
 
 	// Handle connection
-	h.handleConnection(conn, *authCtx.UserID, authCtx.OrgID, authCtx.ProjectID, jwt)
+	h.handleConnection(conn, sessionOwner, authCtx.OrgID, authCtx.ProjectID, token)
 }
 
 func (h *TerminalHandler) handleConnection(conn *ws.Conn, userID, orgID, projectID, jwt string) {
