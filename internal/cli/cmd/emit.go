@@ -24,17 +24,22 @@ var (
 	rawOutput      bool
 	scheduleAt     string
 	scheduleIn     string
+	dataFlag       string
 )
 
 var emitCmd = &cobra.Command{
 	Use:   "emit <topic> [data]",
 	Short: "Emit an event to a topic",
-	Long: `Emit an event to a topic. Data can be provided as an argument or via stdin.
+	Long: `Emit an event to a topic. Data can be provided as an argument, via -d flag, or via stdin.
 
 Examples:
   notif emit orders.created '{"id": 123}'
+  notif emit orders.created -d '{"id": 123}'
   echo '{"id": 123}' | notif emit orders.created
   cat event.json | notif emit orders.created
+
+Using -d flag (recommended for special characters like !):
+  notif emit tts -d '{"text": "Hello!"}'
 
 Schedule for later:
   notif emit orders.reminder '{"id": 123}' --at "2024-01-15T10:00:00Z"
@@ -46,7 +51,10 @@ Request-response mode (wait for reply):
     --filter '.id == $input.id' \
     --timeout 30s
 
-The $input variable in --filter references the emitted request data.`,
+The $input variable in --filter references the emitted request data.
+
+Note: If your shell expands special characters like ! (bash history), use:
+  printf '{"text":"Hello!"}' | notif emit topic`,
 	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
 		if cfg.APIKey == "" {
@@ -56,9 +64,11 @@ The $input variable in --filter references the emitted request data.`,
 
 		topic := args[0]
 
-		// Get data from arg or stdin
+		// Get data from -d flag, arg, or stdin (in priority order)
 		var data string
-		if len(args) > 1 {
+		if dataFlag != "" {
+			data = dataFlag
+		} else if len(args) > 1 {
 			data = args[1]
 		} else {
 			// Check if stdin has data
@@ -74,9 +84,12 @@ The $input variable in --filter references the emitted request data.`,
 		}
 
 		if data == "" {
-			out.Error("No data provided. Pass as argument or pipe via stdin.")
+			out.Error("No data provided. Use -d flag, pass as argument, or pipe via stdin.")
 			return
 		}
+
+		// Fix shell escaping of ! (zsh/bash escape \! to avoid history expansion)
+		data = strings.ReplaceAll(data, `\!`, `!`)
 
 		// Validate JSON
 		if !json.Valid([]byte(data)) {
@@ -240,6 +253,7 @@ func runRequestResponse(c *client.Client, topic string, data json.RawMessage) {
 }
 
 func init() {
+	emitCmd.Flags().StringVarP(&dataFlag, "data", "d", "", "JSON data to emit (alternative to positional arg)")
 	emitCmd.Flags().StringVar(&replyTo, "reply-to", "", "topics to wait for response (comma-separated)")
 	emitCmd.Flags().StringVar(&replyFilter, "filter", "", "jq expression to match response")
 	emitCmd.Flags().DurationVar(&replyTimeout, "timeout", 30*time.Second, "timeout waiting for response")
