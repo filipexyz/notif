@@ -129,7 +129,11 @@ Filter and auto-exit:
 
 			case err := <-sub.Errors():
 				// Log error but don't exit - SDK will auto-reconnect
-				out.Warn("Connection error: %v (reconnecting...)", err)
+				if _, ok := err.(*client.ReconnectedError); ok {
+					out.Success("Reconnected")
+				} else {
+					out.Warn("Connection error: %v (reconnecting...)", err)
+				}
 
 			case <-sigCh:
 				if !jsonOutput {

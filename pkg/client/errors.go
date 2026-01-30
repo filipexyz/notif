@@ -11,6 +11,13 @@ var (
 	ErrMaxReconnectAttempts = errors.New("max reconnect attempts reached")
 )
 
+// ReconnectedError is sent when the connection is successfully restored.
+type ReconnectedError struct{}
+
+func (e *ReconnectedError) Error() string {
+	return "reconnected"
+}
+
 // APIError represents an error from the API.
 type APIError struct {
 	StatusCode int

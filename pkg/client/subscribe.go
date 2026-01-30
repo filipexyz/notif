@@ -178,6 +178,11 @@ func (s *Subscription) reconnect() {
 
 		if err == nil {
 			// Successfully reconnected, restart pumps
+			// Send reconnection success to errors channel so CLI can log it
+			select {
+			case s.errors <- &ReconnectedError{}:
+			default:
+			}
 			go s.readPump()
 			go s.writePump()
 			return
