@@ -2,8 +2,11 @@ import WebSocket from 'ws'
 import { SubscribeOptions, ResolvedSubscribeOptions, Event, ServerMessage, EventMessage } from './types.js'
 import { ConnectionError, APIError } from './errors.js'
 
-const MAX_RECONNECT_ATTEMPTS = 5
+const MAX_RECONNECT_ATTEMPTS = 0 // 0 = infinite
 const INITIAL_RECONNECT_DELAY = 1000
+const MAX_RECONNECT_DELAY = 30000
+const PING_INTERVAL = 30000 // 30 seconds
+const PONG_TIMEOUT = 10000 // 10 seconds to receive pong
 
 export class EventStream implements AsyncIterable<Event> {
   private ws: WebSocket | null = null
@@ -21,6 +24,9 @@ export class EventStream implements AsyncIterable<Event> {
   private connectStarted = false
   private reconnectAttempts = 0
   private closeCallbacks: Array<() => void> = []
+  private pingInterval: ReturnType<typeof setInterval> | null = null
+  private pongTimeout: ReturnType<typeof setTimeout> | null = null
+  private waitingForPong = false
 
   constructor(
     apiKey: string,
@@ -53,6 +59,15 @@ export class EventStream implements AsyncIterable<Event> {
         this.connected = true
         this.reconnectAttempts = 0
         this.sendSubscribe()
+        this.startPing()
+      })
+
+      this.ws.on('pong', () => {
+        this.waitingForPong = false
+        if (this.pongTimeout) {
+          clearTimeout(this.pongTimeout)
+          this.pongTimeout = null
+        }
       })
 
       this.ws.on('message', (data: WebSocket.Data) => {
@@ -70,6 +85,7 @@ export class EventStream implements AsyncIterable<Event> {
 
       this.ws.on('close', () => {
         this.connected = false
+        this.stopPing()
         if (!this.closed) {
           this.attemptReconnect()
         }
@@ -155,14 +171,51 @@ export class EventStream implements AsyncIterable<Event> {
     }))
   }
 
+  private startPing(): void {
+    this.stopPing()
+    this.pingInterval = setInterval(() => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+      if (this.waitingForPong) {
+        // Previous ping didn't get a pong, connection is dead
+        this.ws.terminate()
+        return
+      }
+
+      this.waitingForPong = true
+      this.ws.ping()
+
+      this.pongTimeout = setTimeout(() => {
+        if (this.waitingForPong && this.ws) {
+          // Pong timeout, force close
+          this.ws.terminate()
+        }
+      }, PONG_TIMEOUT)
+    }, PING_INTERVAL)
+  }
+
+  private stopPing(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval)
+      this.pingInterval = null
+    }
+    if (this.pongTimeout) {
+      clearTimeout(this.pongTimeout)
+      this.pongTimeout = null
+    }
+    this.waitingForPong = false
+  }
+
   private attemptReconnect(): void {
-    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    if (MAX_RECONNECT_ATTEMPTS > 0 && this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       this.rejectPending(new ConnectionError('max reconnection attempts reached'))
       this.close()
       return
     }
 
-    const delay = INITIAL_RECONNECT_DELAY * Math.pow(2, this.reconnectAttempts)
+    const delay = Math.min(
+      INITIAL_RECONNECT_DELAY * Math.pow(2, this.reconnectAttempts),
+      MAX_RECONNECT_DELAY
+    )
     this.reconnectAttempts++
 
     setTimeout(() => {
@@ -221,6 +274,7 @@ export class EventStream implements AsyncIterable<Event> {
     if (this.closed) return
 
     this.closed = true
+    this.stopPing()
 
     // Resolve any pending promises with done
     for (const resolver of this.eventResolvers) {

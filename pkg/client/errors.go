@@ -1,6 +1,15 @@
 package client
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// Sentinel errors for connection handling.
+var (
+	ErrNotConnected         = errors.New("not connected")
+	ErrMaxReconnectAttempts = errors.New("max reconnect attempts reached")
+)
 
 // APIError represents an error from the API.
 type APIError struct {

@@ -12,8 +12,11 @@ from .errors import APIError
 from .errors import ConnectionError as NotifConnectionError
 from .types import Event
 
-MAX_RECONNECT_ATTEMPTS = 5
+MAX_RECONNECT_ATTEMPTS = 0  # 0 = infinite
 INITIAL_RECONNECT_DELAY = 1.0
+MAX_RECONNECT_DELAY = 30.0
+PING_INTERVAL = 30.0  # 30 seconds
+PONG_TIMEOUT = 10.0  # 10 seconds to receive pong
 
 
 class EventStream:
@@ -41,6 +44,7 @@ class EventStream:
         self._connected = False
         self._reconnect_attempts = 0
         self._reader_task: asyncio.Task[None] | None = None
+        self._ping_task: asyncio.Task[None] | None = None
         self._on_close: Callable[[], None] | None = None
 
     async def _connect(self) -> None:
@@ -78,8 +82,9 @@ class EventStream:
         self._connected = True
         self._reconnect_attempts = 0
 
-        # Start background reader
+        # Start background tasks
         self._reader_task = asyncio.create_task(self._read_messages())
+        self._ping_task = asyncio.create_task(self._ping_loop())
 
     async def _read_messages(self) -> None:
         try:
@@ -142,12 +147,46 @@ class EventStream:
                 )
             )
 
+    async def _ping_loop(self) -> None:
+        """Send periodic pings to detect dead connections."""
+        try:
+            while self._connected and self._ws and not self._closed:
+                await asyncio.sleep(PING_INTERVAL)
+                if self._ws and self._connected:
+                    try:
+                        pong = await self._ws.ping()
+                        await asyncio.wait_for(pong, timeout=PONG_TIMEOUT)
+                    except asyncio.TimeoutError:
+                        # Pong timeout, connection is dead
+                        if self._ws:
+                            await self._ws.close()
+                        break
+                    except Exception:
+                        break
+        except asyncio.CancelledError:
+            pass
+
+    async def _stop_tasks(self) -> None:
+        """Stop background tasks."""
+        if self._ping_task:
+            self._ping_task.cancel()
+            try:
+                await self._ping_task
+            except asyncio.CancelledError:
+                pass
+            self._ping_task = None
+
     async def _attempt_reconnect(self) -> None:
-        if self._reconnect_attempts >= MAX_RECONNECT_ATTEMPTS:
+        await self._stop_tasks()
+
+        if MAX_RECONNECT_ATTEMPTS > 0 and self._reconnect_attempts >= MAX_RECONNECT_ATTEMPTS:
             self._closed = True
             return
 
-        delay = INITIAL_RECONNECT_DELAY * (2**self._reconnect_attempts)
+        delay = min(
+            INITIAL_RECONNECT_DELAY * (2**self._reconnect_attempts),
+            MAX_RECONNECT_DELAY,
+        )
         self._reconnect_attempts += 1
 
         await asyncio.sleep(delay)
@@ -185,6 +224,8 @@ class EventStream:
             return
 
         self._closed = True
+
+        await self._stop_tasks()
 
         if self._reader_task:
             self._reader_task.cancel()
