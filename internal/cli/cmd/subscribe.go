@@ -128,8 +128,8 @@ Filter and auto-exit:
 				}
 
 			case err := <-sub.Errors():
-				out.Error("Subscription error: %v", err)
-				return
+				// Log error but don't exit - SDK will auto-reconnect
+				out.Warn("Connection error: %v (reconnecting...)", err)
 
 			case <-sigCh:
 				if !jsonOutput {
