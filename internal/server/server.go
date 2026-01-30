@@ -10,6 +10,7 @@ import (
 	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
+	"github.com/filipexyz/notif/internal/middleware"
 	"github.com/filipexyz/notif/internal/nats"
 	"github.com/filipexyz/notif/internal/scheduler"
 	"github.com/filipexyz/notif/internal/terminal"
@@ -26,6 +27,7 @@ type Server struct {
 	hub              *websocket.Hub
 	terminalManager  *terminal.Manager
 	schedulerWorker  *scheduler.Worker
+	rateLimiter      *middleware.RateLimiter
 	server           *http.Server
 	webhookCancel    context.CancelFunc
 	schedulerCancel  context.CancelFunc
@@ -62,6 +64,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
 	publisher := nats.NewPublisher(nc.JetStream())
 	schedWorker := scheduler.NewWorker(queries, publisher, 10*time.Second)
 
+	// Initialize rate limiter
+	rateLimiter := middleware.NewRateLimiter(middleware.DefaultRateLimitConfig())
+
 	s := &Server{
 		cfg:              cfg,
 		db:               pool,
@@ -69,6 +74,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
 		hub:              hub,
 		terminalManager:  termMgr,
 		schedulerWorker:  schedWorker,
+		rateLimiter:      rateLimiter,
 	}
 
 	s.server = &http.Server{
@@ -124,6 +130,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	if s.schedulerCancel != nil {
 		s.schedulerCancel()
+	}
+	if s.rateLimiter != nil {
+		s.rateLimiter.Stop()
 	}
 	return s.server.Shutdown(ctx)
 }

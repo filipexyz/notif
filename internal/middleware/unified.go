@@ -56,6 +56,12 @@ func UnifiedAuth(queries *db.Queries, cfg *config.Config) func(http.Handler) htt
 						// Also store API key in context for handlers that need it
 						ctx := context.WithValue(r.Context(), apiKeyContextKey, &apiKey)
 						ctx = context.WithValue(ctx, authCtxKey, authCtx)
+
+						// Store rate limit from API key for rate limiter middleware
+						if apiKey.RateLimitPerSecond.Valid && apiKey.RateLimitPerSecond.Int32 > 0 {
+							ctx = SetRateLimit(ctx, int(apiKey.RateLimitPerSecond.Int32))
+						}
+
 						next.ServeHTTP(w, r.WithContext(ctx))
 						return
 					}

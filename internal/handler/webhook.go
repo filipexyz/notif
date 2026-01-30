@@ -8,6 +8,7 @@ import (
 
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/middleware"
+	"github.com/filipexyz/notif/internal/security"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -53,6 +54,12 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Topics) == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "at least one topic is required"})
+		return
+	}
+
+	// Validate URL to prevent SSRF attacks
+	if err := security.ValidateWebhookURL(req.URL); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid webhook URL: " + err.Error()})
 		return
 	}
 
@@ -189,6 +196,11 @@ func (h *WebhookHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Apply updates
 	url := webhook.Url
 	if req.URL != "" {
+		// Validate new URL to prevent SSRF attacks
+		if err := security.ValidateWebhookURL(req.URL); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid webhook URL: " + err.Error()})
+			return
+		}
 		url = req.URL
 	}
 	topics := webhook.Topics

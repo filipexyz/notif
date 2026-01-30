@@ -79,6 +79,7 @@ func (s *Server) routes() http.Handler {
 	// WebSocket endpoint at root (no /api/v1 prefix for WS)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.UnifiedAuth(queries, s.cfg))
+		r.Use(middleware.RateLimit(s.rateLimiter))
 		r.Get("/ws", subscribeHandler.Subscribe)
 	})
 
@@ -91,6 +92,8 @@ func (s *Server) routes() http.Handler {
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// Rate limit BEFORE auth to protect against brute force
+		r.Use(middleware.RateLimit(s.rateLimiter))
 		r.Use(middleware.UnifiedAuth(queries, s.cfg))
 
 		// Events
