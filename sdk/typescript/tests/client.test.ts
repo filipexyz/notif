@@ -1,6 +1,63 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Notif, AuthError, APIError, ConnectionError } from '../src/index.js'
 
+describe('singleton usage pattern', () => {
+  const validApiKey = 'nsh_testkey12345678901234567890'
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('shares instance when assigned to module variable', () => {
+    const singleton = new Notif({ apiKey: validApiKey })
+
+    // Simulating multiple imports getting same instance
+    const ref1 = singleton
+    const ref2 = singleton
+
+    expect(ref1).toBe(ref2)
+    expect(ref1.serverUrl).toBe(ref2.serverUrl)
+
+    singleton.close()
+  })
+
+  it('maintains state across multiple emit calls', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id: '1', topic: 'test', seq: 1 })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const singleton = new Notif({ apiKey: validApiKey })
+
+    await singleton.emit('topic1', { a: 1 })
+    await singleton.emit('topic2', { b: 2 })
+    await singleton.emit('topic3', { c: 3 })
+
+    expect(mockFetch).toHaveBeenCalledTimes(3)
+
+    singleton.close()
+  })
+
+  it('close() cleans up all active streams', () => {
+    const singleton = new Notif({
+      apiKey: validApiKey,
+      server: 'http://localhost:9999'
+    })
+
+    // Create streams (won't connect since no server)
+    const stream1 = singleton.subscribe('topic1')
+    const stream2 = singleton.subscribe('topic2')
+
+    // Close all
+    singleton.close()
+
+    // Streams should be closed
+    expect(stream1.isClosed).toBe(true)
+    expect(stream2.isClosed).toBe(true)
+  })
+})
+
 describe('Notif', () => {
   const validApiKey = 'nsh_testkey12345678901234567890'
 

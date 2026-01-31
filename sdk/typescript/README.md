@@ -46,6 +46,42 @@ const client = new Notif({ server: 'http://localhost:8080' })
 const client = new Notif({ timeout: 60000 })
 ```
 
+## Singleton Pattern
+
+For applications that need a single shared instance (similar to Prisma), create your own singleton:
+
+```typescript
+// lib/notif.ts
+import { Notif } from 'notif.sh'
+
+// Prevent multiple instances in development (hot reload)
+const globalForNotif = globalThis as unknown as { notif: Notif }
+
+export const notif = globalForNotif.notif || new Notif()
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForNotif.notif = notif
+}
+```
+
+Then import from your singleton:
+
+```typescript
+import { notif } from './lib/notif'
+
+await notif.emit('orders.created', { id: '123' })
+```
+
+**When to use singleton:**
+- Long-running servers that subscribe to events
+- Applications where multiple components emit events
+- Avoiding connection overhead per request
+
+**When to create new instances:**
+- Different API keys per tenant
+- Isolated testing
+- Short-lived scripts
+
 ## Emitting Events
 
 ```typescript

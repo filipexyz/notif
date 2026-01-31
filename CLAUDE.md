@@ -109,6 +109,8 @@ API key format: `nsh_` + 28 alphanumeric chars (regex: `^nsh_[a-zA-Z0-9]{28}$`)
 
 All SDKs use `NOTIF_API_KEY` env var by default. Core methods: `emit(topic, data)` and `subscribe(...topics)`.
 
+**Singleton pattern**: SDKs export classes, not singletons. For shared instances, see each SDK's README for the recommended pattern (similar to Prisma's approach).
+
 ## Development
 
 ```bash

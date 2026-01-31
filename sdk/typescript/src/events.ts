@@ -298,4 +298,8 @@ export class EventStream implements AsyncIterable<Event> {
   get isConnected(): boolean {
     return this.connected
   }
+
+  get isClosed(): boolean {
+    return this.closed
+  }
 }
