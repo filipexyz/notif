@@ -56,11 +56,11 @@ func (s *Server) routes() http.Handler {
 	// ================================================================
 	publisher := nats.NewPublisher(s.nats.JetStream())
 	schemaRegistry := schema.NewRegistry(queries)
-	emitHandler := handler.NewEmitHandler(publisher, queries, schemaRegistry)
+	emitHandler := handler.NewEmitHandler(publisher, queries, schemaRegistry, s.cfg)
 
 	consumerMgr := nats.NewConsumerManager(s.nats.Stream())
 	dlqPublisher := nats.NewDLQPublisher(s.nats.JetStream())
-	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr, dlqPublisher, queries)
+	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr, dlqPublisher, queries, s.cfg)
 
 	dlqReader, _ := nats.NewDLQReader(s.nats.JetStream())
 	dlqHandler := handler.NewDLQHandler(dlqReader, publisher)

@@ -20,6 +20,7 @@ type Config struct {
 	// Server
 	Port            string        `env:"PORT" envDefault:"8080"`
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"30s"`
+	MaxPayloadSize  int64         `env:"MAX_PAYLOAD_SIZE" envDefault:"262144"` // 256KB
 
 	// Database
 	DatabaseURL string `env:"DATABASE_URL,required"`

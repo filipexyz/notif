@@ -24,22 +24,22 @@ type pendingMsg struct {
 }
 
 const (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 64 * 1024
+	writeWait  = 10 * time.Second
+	pongWait   = 60 * time.Second
+	pingPeriod = (pongWait * 9) / 10
 )
 
 // Client represents a WebSocket client connection.
 type Client struct {
-	hub       *Hub
-	conn      *websocket.Conn
-	send      chan []byte
-	apiKeyID  string
-	orgID     string      // Organization ID for multi-tenant isolation
-	projectID string      // Project ID for multi-tenant isolation
-	clientID  string      // Unique client identifier for tracking
-	queries   *db.Queries // For delivery tracking
+	hub            *Hub
+	conn           *websocket.Conn
+	send           chan []byte
+	apiKeyID       string
+	orgID          string      // Organization ID for multi-tenant isolation
+	projectID      string      // Project ID for multi-tenant isolation
+	clientID       string      // Unique client identifier for tracking
+	queries        *db.Queries // For delivery tracking
+	maxMessageSize int64       // Max inbound message size
 
 	// Subscription state
 	mu              sync.RWMutex
@@ -54,7 +54,7 @@ type Client struct {
 }
 
 // NewClient creates a new WebSocket client.
-func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, orgID, projectID string, dlqPublisher *nats.DLQPublisher, queries *db.Queries, clientID string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, orgID, projectID string, dlqPublisher *nats.DLQPublisher, queries *db.Queries, clientID string, maxMessageSize int64) *Client {
 	return &Client{
 		hub:             hub,
 		conn:            conn,
@@ -67,6 +67,7 @@ func NewClient(hub *Hub, conn *websocket.Conn, apiKeyID, orgID, projectID string
 		pendingMessages: make(map[string]*pendingMsg),
 		maxRetries:      5,
 		dlqPublisher:    dlqPublisher,
+		maxMessageSize:  maxMessageSize,
 	}
 }
 
@@ -78,7 +79,7 @@ func (c *Client) ReadPump(ctx context.Context, consumerMgr *nats.ConsumerManager
 		c.conn.Close()
 	}()
 
-	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadLimit(c.maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))

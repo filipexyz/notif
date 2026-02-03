@@ -2,10 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 
+	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/domain"
 	"github.com/filipexyz/notif/internal/middleware"
@@ -14,34 +16,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const maxPayloadSize = 64 * 1024 // 64KB
-
 // EmitHandler handles POST /emit.
 type EmitHandler struct {
 	publisher      *nats.Publisher
 	queries        *db.Queries
 	schemaRegistry *schema.Registry
+	cfg            *config.Config
 }
 
 // NewEmitHandler creates a new EmitHandler.
-func NewEmitHandler(publisher *nats.Publisher, queries *db.Queries, schemaRegistry *schema.Registry) *EmitHandler {
+func NewEmitHandler(publisher *nats.Publisher, queries *db.Queries, schemaRegistry *schema.Registry, cfg *config.Config) *EmitHandler {
 	return &EmitHandler{
 		publisher:      publisher,
 		queries:        queries,
 		schemaRegistry: schemaRegistry,
+		cfg:            cfg,
 	}
 }
 
 // Emit publishes an event to a topic.
 func (h *EmitHandler) Emit(w http.ResponseWriter, r *http.Request) {
 	// Limit body size
-	r.Body = http.MaxBytesReader(w, r.Body, maxPayloadSize)
+	maxSize := h.cfg.MaxPayloadSize
+	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 
 	var req domain.EmitRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		if strings.Contains(err.Error(), "http: request body too large") {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{
-				"error": "payload too large, max 64KB",
+				"error": fmt.Sprintf("payload too large, max %dKB", maxSize/1024),
 			})
 			return
 		}

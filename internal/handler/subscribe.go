@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/middleware"
 	"github.com/filipexyz/notif/internal/nats"
@@ -30,15 +31,17 @@ type SubscribeHandler struct {
 	consumerMgr  *nats.ConsumerManager
 	dlqPublisher *nats.DLQPublisher
 	queries      *db.Queries
+	cfg          *config.Config
 }
 
 // NewSubscribeHandler creates a new SubscribeHandler.
-func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, dlqPublisher *nats.DLQPublisher, queries *db.Queries) *SubscribeHandler {
+func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, dlqPublisher *nats.DLQPublisher, queries *db.Queries, cfg *config.Config) *SubscribeHandler {
 	return &SubscribeHandler{
 		hub:          hub,
 		consumerMgr:  consumerMgr,
 		dlqPublisher: dlqPublisher,
 		queries:      queries,
+		cfg:          cfg,
 	}
 }
 
@@ -73,7 +76,7 @@ func (h *SubscribeHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientID := generateClientID()
-	client := websocket.NewClient(h.hub, conn, apiKeyID, orgID, projectID, h.dlqPublisher, h.queries, clientID)
+	client := websocket.NewClient(h.hub, conn, apiKeyID, orgID, projectID, h.dlqPublisher, h.queries, clientID, h.cfg.MaxPayloadSize)
 	h.hub.Register(client)
 
 	slog.Info("websocket client connected", "client_id", clientID)
