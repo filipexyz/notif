@@ -183,8 +183,8 @@ func TestEmitEndpoint(t *testing.T) {
 	})
 
 	t.Run("emit with large payload fails", func(t *testing.T) {
-		// Create payload larger than 64KB
-		largeData := strings.Repeat("x", 70*1024)
+		// Create payload larger than 256KB (max payload size)
+		largeData := strings.Repeat("x", 270*1024)
 		payload := `{"topic": "test.large", "data": {"msg": "` + largeData + `"}}`
 		req, _ := http.NewRequest("POST", env.ServerURL+"/api/v1/emit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")

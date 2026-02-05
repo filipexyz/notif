@@ -133,6 +133,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 		NatsURL:         natsURL,
 		LogLevel:        "debug",
 		LogFormat:       "text",
+		MaxPayloadSize:  262144, // 256KB
 	}
 
 	srv := server.New(cfg, db, nc)
