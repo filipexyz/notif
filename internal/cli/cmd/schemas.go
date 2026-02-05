@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/filipexyz/notif/internal/cli/display"
 	"github.com/filipexyz/notif/internal/codegen"
 	"github.com/filipexyz/notif/pkg/client"
 	"github.com/spf13/cobra"
@@ -17,7 +19,51 @@ import (
 var schemasCmd = &cobra.Command{
 	Use:   "schemas",
 	Short: "Manage event schemas",
-	Long:  `Create, list, validate, and manage JSON schemas for event validation.`,
+	Long: `Create, list, validate, and manage JSON schemas for event validation.
+
+Schemas can include custom display configurations using the x-notif-display extension.
+This controls how events are rendered in 'notif subscribe'.
+
+Example schema with display config:
+  {
+    "type": "object",
+    "x-notif-display": {
+      "template": "{{.data.status | color \"green\"}} - {{.data.message}}"
+    },
+    "properties": {
+      "status": { "type": "string" },
+      "message": { "type": "string" }
+    }
+  }
+
+Display config options:
+  template      - Go template string with color/formatting functions
+  topicPattern  - Extract variables from topic (e.g., "orders.{action}.{id}")
+  fields        - Table mode with aligned columns
+  conditions    - Conditional formatting based on jq expressions
+
+Available template functions:
+  Colors:    color, rgb, bg, bold, dim, italic, underline
+  Strings:   upper, lower, truncate, trim, replace
+  Format:    printf, json, time
+  Logic:     eq, ne, gt, lt, contains, default
+
+Examples:
+  # Simple template
+  "template": "{{.data.name | bold}} - {{.data.status}}"
+
+  # With colors
+  "template": "{{.data.level | color \"red\"}} {{.data.message}}"
+
+  # Topic extraction
+  "topicPattern": "orders.{action}.{id}",
+  "template": "[{{.topic.action | upper}}] Order #{{.topic.id}}"
+
+  # Conditional colors
+  "conditions": [
+    { "when": ".data.status == \"error\"", "color": "red" },
+    { "when": ".data.status == \"ok\"", "color": "green" }
+  ]`,
 }
 
 // SchemaDefinition represents the YAML schema file structure.
@@ -644,6 +690,8 @@ var (
 	createVersion     string
 	createDescription string
 	editVersion       string
+	cacheRefresh      bool
+	cacheClear        bool
 )
 
 var schemasCreateCmd = &cobra.Command{
@@ -652,8 +700,41 @@ var schemasCreateCmd = &cobra.Command{
 	Long: `Create a new schema. Reads JSON Schema from stdin.
 
 Examples:
+  # Basic schema
   echo '{"type": "object", "properties": {"id": {"type": "string"}}}' | notif schemas create order-placed --topic "orders.placed"
-  cat schema.json | notif schemas create user-created --topic "users.*" --version 1.0.0`,
+
+  # Schema with custom display for 'notif subscribe'
+  cat <<'EOF' | notif schemas create payment --topic "payments.*"
+  {
+    "type": "object",
+    "x-notif-display": {
+      "template": "💰 {{.data.amount | printf \"$%.2f\"}} - {{.data.status | color \"green\"}}"
+    },
+    "properties": {
+      "amount": { "type": "number" },
+      "status": { "type": "string" }
+    }
+  }
+  EOF
+
+  # Schema with conditional colors
+  cat <<'EOF' | notif schemas create logs --topic "logs.*"
+  {
+    "type": "object",
+    "x-notif-display": {
+      "template": "[{{.data.level}}] {{.data.message}}",
+      "conditions": [
+        { "when": ".data.level == \"error\"", "color": "red" },
+        { "when": ".data.level == \"warn\"", "color": "yellow" },
+        { "when": ".data.level == \"info\"", "color": "blue" }
+      ]
+    },
+    "properties": {
+      "level": { "type": "string" },
+      "message": { "type": "string" }
+    }
+  }
+  EOF`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if cfg.APIKey == "" {
@@ -810,6 +891,126 @@ func bumpPatchVersion(v string) string {
 	return fmt.Sprintf("%s.%s.%d", parts[0], parts[1], patch+1)
 }
 
+var schemasCacheCmd = &cobra.Command{
+	Use:   "cache",
+	Short: "Manage local schema cache",
+	Long: `View, refresh, or clear the local schema cache used for display configurations.
+
+Examples:
+  notif schemas cache              # Show cache status
+  notif schemas cache --refresh    # Force refresh from server
+  notif schemas cache --clear      # Remove local cache`,
+	Run: func(cmd *cobra.Command, args []string) {
+		c := getClient()
+		loader := display.NewConfigLoader(c)
+
+		// Handle --clear flag
+		if cacheClear {
+			if err := loader.ClearCache(); err != nil {
+				out.Error("Failed to clear cache: %v", err)
+				return
+			}
+			if jsonOutput {
+				out.JSON(map[string]string{"status": "cleared"})
+				return
+			}
+			out.Success("Cache cleared")
+			return
+		}
+
+		// Handle --refresh flag
+		if cacheRefresh {
+			if cfg.APIKey == "" {
+				out.Error("No API key configured. Run 'notif auth <key>' first.")
+				return
+			}
+			if err := loader.Refresh(cmd.Context()); err != nil {
+				out.Error("Failed to refresh cache: %v", err)
+				return
+			}
+			if jsonOutput {
+				out.JSON(map[string]string{"status": "refreshed"})
+				return
+			}
+			out.Success("Cache refreshed")
+		}
+
+		// Load cache to show status
+		_ = loader.Load(cmd.Context())
+
+		info := loader.CacheInfo()
+		if info == nil {
+			if jsonOutput {
+				out.JSON(map[string]interface{}{"cached": false})
+				return
+			}
+			out.Info("No cache available")
+			out.Info("Run 'notif schemas cache --refresh' to populate the cache")
+			return
+		}
+
+		if jsonOutput {
+			out.JSON(map[string]interface{}{
+				"cached":       true,
+				"server":       info.Server,
+				"last_sync":    info.LastSync,
+				"ttl":          info.TTL,
+				"schema_count": info.SchemaCount,
+			})
+			return
+		}
+
+		out.Header("Schema Cache")
+		out.KeyValue("Cache directory", "~/.notif/cache/schemas/")
+		out.KeyValue("Server", info.Server)
+		out.KeyValue("Last sync", formatRelativeTime(info.LastSync))
+		out.KeyValue("Schemas", fmt.Sprintf("%d", info.SchemaCount))
+		out.KeyValue("TTL", fmt.Sprintf("%d seconds", info.TTL))
+
+		// Show schemas with display configs
+		schemas := loader.GetAllSchemas()
+		displayCount := 0
+		for _, s := range schemas {
+			if s.Display != nil {
+				displayCount++
+			}
+		}
+		out.KeyValue("With display config", fmt.Sprintf("%d", displayCount))
+	},
+}
+
+// formatRelativeTime formats a timestamp as a relative time string.
+func formatRelativeTime(ts string) string {
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return ts
+	}
+
+	duration := time.Since(t)
+	switch {
+	case duration < time.Minute:
+		return "just now"
+	case duration < time.Hour:
+		mins := int(duration.Minutes())
+		if mins == 1 {
+			return "1 minute ago"
+		}
+		return fmt.Sprintf("%d minutes ago", mins)
+	case duration < 24*time.Hour:
+		hours := int(duration.Hours())
+		if hours == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", hours)
+	default:
+		days := int(duration.Hours() / 24)
+		if days == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", days)
+	}
+}
+
 func init() {
 	schemasCmd.AddCommand(schemasPushCmd)
 	schemasCmd.AddCommand(schemasListCmd)
@@ -822,6 +1023,7 @@ func init() {
 	schemasCmd.AddCommand(schemasInitCmd)
 	schemasCmd.AddCommand(schemasCreateCmd)
 	schemasCmd.AddCommand(schemasEditCmd)
+	schemasCmd.AddCommand(schemasCacheCmd)
 
 	// Get command flags
 	schemasGetCmd.Flags().BoolVar(&getSchemaOnly, "schema", false, "output only the JSON Schema (for piping)")
@@ -841,6 +1043,10 @@ func init() {
 
 	// Init command flags
 	schemasInitCmd.Flags().BoolVar(&initAllSchemas, "all", false, "include all schemas from server")
+
+	// Cache command flags
+	schemasCacheCmd.Flags().BoolVar(&cacheRefresh, "refresh", false, "force refresh from server")
+	schemasCacheCmd.Flags().BoolVar(&cacheClear, "clear", false, "remove local cache")
 
 	rootCmd.AddCommand(schemasCmd)
 }

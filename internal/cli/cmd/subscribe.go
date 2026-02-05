@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/filipexyz/notif/internal/cli/display"
 	"github.com/filipexyz/notif/pkg/client"
 	"github.com/itchyny/gojq"
 	"github.com/spf13/cobra"
@@ -21,6 +23,12 @@ var (
 	subscribeOnce    bool
 	subscribeCount   int
 	subscribeTimeout time.Duration
+	subscribeFormat  string
+	subscribeFields  string
+	subscribeNoColor bool
+	subscribeNoCache bool
+	subscribeOffline bool
+	subscribeRaw     bool
 )
 
 var subscribeCmd = &cobra.Command{
@@ -36,7 +44,12 @@ Examples:
 
 Filter and auto-exit:
   notif subscribe 'orders.*' --filter '.status == "completed"' --once
-  notif subscribe 'orders.*' --filter '.amount > 100' --count 5 --timeout 30s`,
+  notif subscribe 'orders.*' --filter '.amount > 100' --count 5 --timeout 30s
+
+Custom display:
+  notif subscribe 'orders.*' --format '{{.data.orderId}} - {{.data.status | color "green"}}'
+  notif subscribe 'payments.*' --format '{{.topic}} {{.data.amount | printf "$%.2f"}}'
+  notif subscribe 'logs.*' --fields "timestamp,topic,data.level,data.message"`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if cfg.APIKey == "" {
@@ -86,6 +99,9 @@ Filter and auto-exit:
 		}
 		defer sub.Close()
 
+		// Set up display renderer
+		renderer := setupRenderer(ctx, c, topics)
+
 		if !jsonOutput {
 			out.Success("Subscribed to %v", topics)
 			if subscribeGroup != "" {
@@ -93,6 +109,11 @@ Filter and auto-exit:
 			}
 			if subscribeFilter != "" {
 				out.KeyValue("Filter", subscribeFilter)
+			}
+			if subscribeFormat != "" {
+				out.KeyValue("Display", "custom template")
+			} else if subscribeFields != "" {
+				out.KeyValue("Display", "table mode")
 			}
 			if subscribeCount > 0 {
 				out.KeyValue("Exit after", fmt.Sprintf("%d events", subscribeCount))
@@ -119,7 +140,18 @@ Filter and auto-exit:
 					continue // skip non-matching events
 				}
 
-				out.Event(event.ID, event.Topic, event.Data, event.Timestamp)
+				// Render event
+				if jsonOutput {
+					out.Event(event.ID, event.Topic, event.Data, event.Timestamp)
+				} else {
+					output, err := renderer.RenderEvent(event.ID, event.Topic, event.Data, event.Timestamp)
+					if err != nil {
+						// Fallback to default format on error
+						out.Event(event.ID, event.Topic, event.Data, event.Timestamp)
+					} else {
+						fmt.Println(output)
+					}
+				}
 				matchCount++
 
 				// Check exit condition
@@ -152,6 +184,103 @@ Filter and auto-exit:
 	},
 }
 
+// setupRenderer creates the appropriate renderer manager based on config.
+func setupRenderer(ctx context.Context, c *client.Client, topics []string) *display.RendererManager {
+	// Create colorizer
+	colorEnabled := !subscribeNoColor && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
+	colorizer := display.NewColorizer(colorEnabled)
+
+	// Create renderer manager
+	renderer := display.NewRendererManager(colorizer)
+
+	// Raw mode: skip all custom display, use default renderer
+	if subscribeRaw {
+		return renderer
+	}
+
+	// Priority 1: CLI --format flag
+	if subscribeFormat != "" {
+		cfg := &display.DisplayConfig{Template: subscribeFormat}
+		if err := renderer.SetDefaultConfig(cfg); err != nil {
+			out.Warn("Invalid format template: %v", err)
+		}
+		return renderer
+	}
+
+	// Priority 2: CLI --fields flag (table mode)
+	if subscribeFields != "" {
+		fields := parseFieldsFlag(subscribeFields)
+		cfg := &display.DisplayConfig{Fields: fields}
+		if err := renderer.SetDefaultConfig(cfg); err != nil {
+			out.Warn("Invalid fields config: %v", err)
+		}
+		return renderer
+	}
+
+	// Priority 3: Load project config (.notif.json) and add ALL topic configs
+	projectCfg, err := display.LoadProjectConfig()
+	if err != nil {
+		out.Warn("Failed to load .notif.json: %v", err)
+	}
+
+	// Add all topic configs from .notif.json
+	if projectCfg != nil && projectCfg.Display != nil && projectCfg.Display.Topics != nil {
+		for pattern, cfg := range projectCfg.Display.Topics {
+			if cfg != nil {
+				if err := renderer.AddTopicConfig(pattern, cfg); err != nil {
+					out.Warn("Failed to setup display for %s: %v", pattern, err)
+				}
+			}
+		}
+	}
+
+	// Priority 4: Load schema cache (server configs)
+	if !subscribeOffline || !subscribeNoCache {
+		loader := display.NewConfigLoader(c)
+		if subscribeNoCache {
+			loader.WithNoCache()
+		}
+		if subscribeOffline {
+			loader.WithOffline()
+		}
+		if err := loader.Load(ctx); err != nil {
+			// Non-fatal, continue without schema configs
+			if subscribeOffline {
+				out.Warn("Failed to load schema cache: %v", err)
+			}
+		} else {
+			// Add all schemas with display configs
+			for _, schema := range loader.GetAllSchemas() {
+				if schema.Display != nil {
+					if err := renderer.AddTopicConfig(schema.TopicPattern, schema.Display); err != nil {
+						out.Warn("Failed to setup display for schema %s: %v", schema.Name, err)
+					}
+				}
+			}
+		}
+	}
+
+	return renderer
+}
+
+// parseFieldsFlag parses the --fields flag into FieldConfig slice.
+func parseFieldsFlag(fields string) []display.FieldConfig {
+	parts := strings.Split(fields, ",")
+	result := make([]display.FieldConfig, 0, len(parts))
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		result = append(result, display.FieldConfig{
+			Path: part,
+		})
+	}
+
+	return result
+}
+
 func init() {
 	subscribeCmd.Flags().StringVar(&subscribeGroup, "group", "", "consumer group name")
 	subscribeCmd.Flags().StringVar(&subscribeFrom, "from", "latest", "start position (latest, beginning)")
@@ -160,5 +289,14 @@ func init() {
 	subscribeCmd.Flags().BoolVar(&subscribeOnce, "once", false, "exit after first matching event")
 	subscribeCmd.Flags().IntVar(&subscribeCount, "count", 0, "exit after N matching events")
 	subscribeCmd.Flags().DurationVar(&subscribeTimeout, "timeout", 0, "timeout waiting for events")
+
+	// Display options
+	subscribeCmd.Flags().StringVar(&subscribeFormat, "format", "", "custom template for event display")
+	subscribeCmd.Flags().StringVar(&subscribeFields, "fields", "", "comma-separated fields for table display")
+	subscribeCmd.Flags().BoolVar(&subscribeNoColor, "no-color", false, "disable colored output")
+	subscribeCmd.Flags().BoolVar(&subscribeNoCache, "no-cache", false, "ignore schema cache, always fetch from server")
+	subscribeCmd.Flags().BoolVar(&subscribeOffline, "offline", false, "use only local cache (error if not available)")
+	subscribeCmd.Flags().BoolVar(&subscribeRaw, "raw", false, "disable custom display, show raw format (timestamp topic json)")
+
 	rootCmd.AddCommand(subscribeCmd)
 }
