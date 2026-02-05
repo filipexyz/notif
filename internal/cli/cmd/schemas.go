@@ -126,11 +126,18 @@ Examples:
 
 		c := getClient()
 
+		pushed := false
 		for _, file := range args {
 			if err := pushSchemaFile(c, file); err != nil {
 				out.Error("Failed to push %s: %v", file, err)
 				continue
 			}
+			pushed = true
+		}
+
+		// Clear cache so pushed schema displays are available immediately
+		if pushed {
+			clearSchemaCache()
 		}
 	},
 }
@@ -347,6 +354,9 @@ var schemasDeleteCmd = &cobra.Command{
 			out.Error("Failed to delete schema: %v", err)
 			return
 		}
+
+		// Clear cache so deleted schema is removed immediately
+		clearSchemaCache()
 
 		if jsonOutput {
 			out.JSON(map[string]string{"status": "deleted"})
@@ -796,6 +806,9 @@ Examples:
 			return
 		}
 
+		// Clear cache so new schema display is available immediately
+		clearSchemaCache()
+
 		if jsonOutput {
 			out.JSON(schema)
 			return
@@ -871,6 +884,9 @@ Examples:
 			return
 		}
 
+		// Clear cache so updated schema display is available immediately
+		clearSchemaCache()
+
 		if jsonOutput {
 			out.JSON(map[string]string{"schema": args[0], "version": version})
 			return
@@ -878,6 +894,13 @@ Examples:
 
 		out.Success("Updated schema: %s (version %s)", args[0], version)
 	},
+}
+
+// clearSchemaCache clears the local schema cache after modifications.
+func clearSchemaCache() {
+	c := getClient()
+	loader := display.NewConfigLoader(c)
+	_ = loader.ClearCache() // Ignore errors, cache clearing is best-effort
 }
 
 // bumpPatchVersion increments the patch version (1.0.0 -> 1.0.1)
