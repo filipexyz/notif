@@ -54,9 +54,12 @@ type Subscription struct {
 	opts    SubscribeOptions
 	conn    *websocket.Conn
 	connMu  sync.RWMutex
+	writeMu sync.Mutex // protects all writes to conn (gorilla/websocket is not thread-safe)
 	events  chan *Event
 	errors  chan error
 	done    chan struct{}
+	stopMu  sync.Mutex     // protects stopPumps
+	stopPumps chan struct{} // signals current pumps to stop on reconnect
 	closed  bool
 	closeMu sync.Mutex
 }
@@ -65,12 +68,13 @@ type Subscription struct {
 // The subscription will automatically reconnect on connection loss.
 func (c *Client) Subscribe(ctx context.Context, topics []string, opts SubscribeOptions) (*Subscription, error) {
 	sub := &Subscription{
-		client: c,
-		topics: topics,
-		opts:   opts,
-		events: make(chan *Event, 100),
-		errors: make(chan error, 10),
-		done:   make(chan struct{}),
+		client:    c,
+		topics:    topics,
+		opts:      opts,
+		events:    make(chan *Event, 100),
+		errors:    make(chan error, 10),
+		done:      make(chan struct{}),
+		stopPumps: make(chan struct{}),
 	}
 
 	// Initial connection
@@ -129,7 +133,10 @@ func (s *Subscription) connect(ctx context.Context) error {
 		},
 	}
 
-	if err := conn.WriteJSON(subscribeMsg); err != nil {
+	s.writeMu.Lock()
+	err = conn.WriteJSON(subscribeMsg)
+	s.writeMu.Unlock()
+	if err != nil {
 		conn.Close()
 		return err
 	}
@@ -144,6 +151,12 @@ func (s *Subscription) reconnect() {
 		return
 	}
 	s.closeMu.Unlock()
+
+	// Stop old pumps before reconnecting to prevent concurrent writes
+	s.stopMu.Lock()
+	close(s.stopPumps)
+	s.stopPumps = make(chan struct{})
+	s.stopMu.Unlock()
 
 	delay := initialReconnectDelay
 	attempts := 0
@@ -202,6 +215,11 @@ func (s *Subscription) reconnect() {
 }
 
 func (s *Subscription) readPump() {
+	// Capture stopPumps channel at start to detect when we should exit
+	s.stopMu.Lock()
+	stopPumps := s.stopPumps
+	s.stopMu.Unlock()
+
 	defer func() {
 		s.connMu.RLock()
 		conn := s.conn
@@ -214,6 +232,8 @@ func (s *Subscription) readPump() {
 	for {
 		select {
 		case <-s.done:
+			return
+		case <-stopPumps:
 			return
 		default:
 		}
@@ -292,9 +312,17 @@ func (s *Subscription) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop()
 
+	// Capture stopPumps channel at start to detect when we should exit
+	s.stopMu.Lock()
+	stopPumps := s.stopPumps
+	s.stopMu.Unlock()
+
 	for {
 		select {
 		case <-s.done:
+			return
+		case <-stopPumps:
+			// Reconnection is happening, exit this pump
 			return
 		case <-ticker.C:
 			s.connMu.RLock()
@@ -305,8 +333,12 @@ func (s *Subscription) writePump() {
 				return
 			}
 
+			s.writeMu.Lock()
 			conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			err := conn.WriteMessage(websocket.PingMessage, nil)
+			s.writeMu.Unlock()
+
+			if err != nil {
 				// Connection lost, readPump will handle reconnection
 				return
 			}
@@ -335,6 +367,9 @@ func (s *Subscription) Ack(eventID string) error {
 		return &ConnectionError{Err: ErrNotConnected}
 	}
 
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
 	conn.SetWriteDeadline(time.Now().Add(writeWait))
 	return conn.WriteJSON(map[string]string{
 		"action": "ack",
@@ -351,6 +386,9 @@ func (s *Subscription) Nack(eventID string, retryIn string) error {
 	if conn == nil {
 		return &ConnectionError{Err: ErrNotConnected}
 	}
+
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 
 	conn.SetWriteDeadline(time.Now().Add(writeWait))
 	return conn.WriteJSON(map[string]any{
