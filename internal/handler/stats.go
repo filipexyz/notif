@@ -31,7 +31,6 @@ type OverviewResponse struct {
 	Events   EventsOverview   `json:"events"`
 	Webhooks WebhooksOverview `json:"webhooks"`
 	DLQ      DLQOverview      `json:"dlq"`
-	APIKeys  APIKeysOverview  `json:"api_keys"`
 }
 
 type EventsOverview struct {
@@ -89,12 +88,6 @@ func (h *StatsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	// DLQ stats (project-scoped)
 	if dlqCount, err := h.dlqReader.Count(r.Context(), authCtx.OrgID, authCtx.ProjectID); err == nil {
 		resp.DLQ.Pending = dlqCount
-	}
-
-	// API key stats
-	if keyStats, err := h.queries.GetAPIKeyStats(r.Context(), orgIDParam); err == nil {
-		resp.APIKeys.Total = keyStats.Total
-		resp.APIKeys.Active24h = keyStats.Active24h
 	}
 
 	writeJSON(w, http.StatusOK, resp)

@@ -127,8 +127,6 @@ func (h *BootstrapHandler) Status(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"bootstrapped": len(keys) > 0,
-		"self_hosted":  h.cfg.IsSelfHosted(),
-		"auth_mode":    string(h.cfg.AuthMode),
 	})
 }
 

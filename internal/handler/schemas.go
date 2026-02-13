@@ -45,7 +45,7 @@ func (h *SchemaHandler) CreateSchema(w http.ResponseWriter, r *http.Request) {
 
 	s, err := h.registry.CreateSchema(ctx, auth.OrgID, auth.ProjectID, &req)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create schema"})
 		return
 	}
 
@@ -63,7 +63,7 @@ func (h *SchemaHandler) ListSchemas(w http.ResponseWriter, r *http.Request) {
 
 	schemas, err := h.registry.ListSchemas(ctx, auth.ProjectID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list schemas"})
 		return
 	}
 
@@ -127,7 +127,7 @@ func (h *SchemaHandler) UpdateSchema(w http.ResponseWriter, r *http.Request) {
 
 	s, err := h.registry.UpdateSchema(ctx, existing.ID, &req)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update schema"})
 		return
 	}
 
@@ -157,7 +157,7 @@ func (h *SchemaHandler) DeleteSchema(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.registry.DeleteSchema(ctx, existing.ID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete schema"})
 		return
 	}
 
@@ -207,7 +207,7 @@ func (h *SchemaHandler) CreateVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	v, err := h.registry.CreateVersion(ctx, existing.ID, &req, createdBy)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to create schema version"})
 		return
 	}
 
@@ -238,7 +238,7 @@ func (h *SchemaHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 
 	versions, err := h.registry.ListVersions(ctx, existing.ID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list versions"})
 		return
 	}
 
@@ -310,7 +310,7 @@ func (h *SchemaHandler) Validate(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.registry.Validate(ctx, existing.ID, req.Data)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "validation failed"})
 		return
 	}
 
@@ -335,7 +335,7 @@ func (h *SchemaHandler) GetSchemaForTopic(w http.ResponseWriter, r *http.Request
 
 	s, err := h.registry.GetSchemaForTopic(ctx, auth.ProjectID, topic)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get schema for topic"})
 		return
 	}
 
