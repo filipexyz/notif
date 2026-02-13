@@ -59,7 +59,7 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Validate URL to prevent SSRF attacks
 	if err := security.ValidateWebhookURL(req.URL); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid webhook URL: " + err.Error()})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid webhook URL"})
 		return
 	}
 
@@ -198,7 +198,7 @@ func (h *WebhookHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.URL != "" {
 		// Validate new URL to prevent SSRF attacks
 		if err := security.ValidateWebhookURL(req.URL); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid webhook URL: " + err.Error()})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid webhook URL"})
 			return
 		}
 		url = req.URL

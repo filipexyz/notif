@@ -45,7 +45,7 @@ func (h *DLQHandler) List(w http.ResponseWriter, r *http.Request) {
 	entries, err := h.reader.List(r.Context(), authCtx.OrgID, authCtx.ProjectID, topic, limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "failed to list DLQ: " + err.Error(),
+			"error": "failed to list DLQ",
 		})
 		return
 	}
@@ -140,7 +140,7 @@ func (h *DLQHandler) Replay(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.reader.Replay(r.Context(), seq, h.publisher); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "failed to replay: " + err.Error(),
+			"error": "failed to replay message",
 		})
 		return
 	}
@@ -184,7 +184,7 @@ func (h *DLQHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.reader.Delete(r.Context(), seq); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "failed to delete: " + err.Error(),
+			"error": "failed to delete message",
 		})
 		return
 	}
@@ -207,7 +207,7 @@ func (h *DLQHandler) ReplayAll(w http.ResponseWriter, r *http.Request) {
 	entries, err := h.reader.List(r.Context(), authCtx.OrgID, authCtx.ProjectID, topic, 1000)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "failed to list DLQ: " + err.Error(),
+			"error": "failed to list DLQ",
 		})
 		return
 	}
@@ -241,7 +241,7 @@ func (h *DLQHandler) Purge(w http.ResponseWriter, r *http.Request) {
 	entries, err := h.reader.List(r.Context(), authCtx.OrgID, authCtx.ProjectID, topic, 1000)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "failed to list DLQ: " + err.Error(),
+			"error": "failed to list DLQ",
 		})
 		return
 	}

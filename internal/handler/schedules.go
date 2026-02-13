@@ -74,7 +74,7 @@ func (h *SchedulesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateScheduleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
 		return
 	}
 
@@ -91,7 +91,7 @@ func (h *SchedulesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	} else if req.In != "" {
 		duration, err := time.ParseDuration(req.In)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid duration: " + err.Error()})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid duration format, use Go duration syntax (e.g. 5m, 1h30m)"})
 			return
 		}
 		scheduledFor = time.Now().Add(duration)

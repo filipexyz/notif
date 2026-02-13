@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/filipexyz/notif/internal/nats"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // EventsHandler handles event query operations.
@@ -68,8 +70,9 @@ func (h *EventsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.reader.Query(r.Context(), opts)
 	if err != nil {
+		slog.Error("failed to query events", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "failed to query events: " + err.Error(),
+			"error": "failed to query events",
 		})
 		return
 	}
@@ -118,22 +121,26 @@ func (h *EventsHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // Stats returns stream statistics.
 func (h *EventsHandler) Stats(w http.ResponseWriter, r *http.Request) {
-	info, err := h.reader.StreamInfo(r.Context())
+	authCtx := middleware.GetAuthContext(r.Context())
+	if authCtx == nil || authCtx.OrgID == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	count, err := h.queries.CountEventsByProject(r.Context(), db.CountEventsByProjectParams{
+		OrgID:     authCtx.OrgID,
+		ProjectID: pgtype.Text{String: authCtx.ProjectID, Valid: authCtx.ProjectID != ""},
+	})
 	if err != nil {
+		slog.Error("failed to get event stats", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "failed to get stream info: " + err.Error(),
+			"error": "failed to get event stats",
 		})
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"messages":    info.State.Msgs,
-		"bytes":       info.State.Bytes,
-		"first_seq":   info.State.FirstSeq,
-		"last_seq":    info.State.LastSeq,
-		"first_time":  info.State.FirstTime,
-		"last_time":   info.State.LastTime,
-		"consumers":   info.State.Consumers,
+		"messages": count,
 	})
 }
 

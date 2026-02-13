@@ -49,7 +49,7 @@ func (h *EmitHandler) Emit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "invalid JSON: " + err.Error(),
+			"error": "invalid JSON payload",
 		})
 		return
 	}
