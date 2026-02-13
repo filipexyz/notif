@@ -7,9 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/domain"
 	notifnats "github.com/filipexyz/notif/internal/nats"
+	"github.com/filipexyz/notif/internal/security"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -62,10 +65,8 @@ type Worker struct {
 // NewWorker creates a new webhook worker.
 func NewWorker(queries *db.Queries, stream jetstream.Stream, js jetstream.JetStream, dlqPublisher *notifnats.DLQPublisher) *Worker {
 	return &Worker{
-		queries: queries,
-		httpClient: &http.Client{
-			Timeout: requestTimeout,
-		},
+		queries:      queries,
+		httpClient:   newSafeHTTPClient(),
 		stream:       stream,
 		js:           js,
 		dlqPublisher: dlqPublisher,
@@ -460,6 +461,42 @@ func pgUUIDToString(u pgtype.UUID) string {
 		return ""
 	}
 	return fmt.Sprintf("%x-%x-%x-%x-%x", u.Bytes[0:4], u.Bytes[4:6], u.Bytes[6:8], u.Bytes[8:10], u.Bytes[10:16])
+}
+
+// newSafeHTTPClient creates an HTTP client that validates destination IPs
+// on every connection (including redirects) to prevent SSRF attacks.
+func newSafeHTTPClient() *http.Client {
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, _, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, err
+			}
+			ips, err := net.LookupIP(host)
+			if err != nil {
+				return nil, fmt.Errorf("cannot resolve %s: %w", host, err)
+			}
+			for _, ip := range ips {
+				if err := security.ValidateIP(ip); err != nil {
+					return nil, fmt.Errorf("blocked destination %s (%s): %w", host, ip, err)
+				}
+			}
+			return dialer.DialContext(ctx, network, addr)
+		},
+	}
+
+	return &http.Client{
+		Timeout:   requestTimeout,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return errors.New("too many redirects")
+			}
+			return nil
+		},
+	}
 }
 
 func parseUUID(s string) pgtype.UUID {

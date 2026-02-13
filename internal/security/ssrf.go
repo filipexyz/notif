@@ -102,18 +102,12 @@ func ValidateWebhookURL(rawURL string) error {
 	// Resolve hostname to IP addresses
 	ips, err := net.LookupIP(hostname)
 	if err != nil {
-		// If we can't resolve, it might be an internal hostname
-		// Be conservative and allow only if it looks like a valid public domain
-		if !looksLikePublicDomain(hostname) {
-			return ErrUnresolvableHost
-		}
-		// Allow unresolvable public-looking domains (might be DNS issue)
-		return nil
+		return ErrUnresolvableHost
 	}
 
 	// Check all resolved IPs
 	for _, ip := range ips {
-		if err := validateIP(ip); err != nil {
+		if err := ValidateIP(ip); err != nil {
 			return err
 		}
 	}
@@ -121,8 +115,8 @@ func ValidateWebhookURL(rawURL string) error {
 	return nil
 }
 
-// validateIP checks if an IP address is safe to use
-func validateIP(ip net.IP) error {
+// ValidateIP checks if an IP address is safe to use.
+func ValidateIP(ip net.IP) error {
 	// Check for loopback (127.0.0.0/8, ::1)
 	if ip.IsLoopback() {
 		return ErrLoopbackIP
@@ -277,28 +271,3 @@ func isLocalhostVariation(hostname string) bool {
 	return false
 }
 
-// looksLikePublicDomain checks if hostname looks like a valid public domain
-func looksLikePublicDomain(hostname string) bool {
-	// Must contain at least one dot
-	if !strings.Contains(hostname, ".") {
-		return false
-	}
-
-	// Should not be an IP address
-	if net.ParseIP(hostname) != nil {
-		return false
-	}
-
-	// Should have a valid TLD (at least 2 chars)
-	parts := strings.Split(hostname, ".")
-	if len(parts) < 2 {
-		return false
-	}
-
-	tld := parts[len(parts)-1]
-	if len(tld) < 2 {
-		return false
-	}
-
-	return true
-}
