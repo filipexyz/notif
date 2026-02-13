@@ -37,13 +37,15 @@ type terminalMessage struct {
 
 // TerminalHandler handles terminal WebSocket connections.
 type TerminalHandler struct {
-	manager *terminal.Manager
+	manager  *terminal.Manager
+	upgrader ws.Upgrader
 }
 
 // NewTerminalHandler creates a new terminal handler.
-func NewTerminalHandler(manager *terminal.Manager) *TerminalHandler {
+func NewTerminalHandler(manager *terminal.Manager, allowedOrigins []string) *TerminalHandler {
 	return &TerminalHandler{
-		manager: manager,
+		manager:  manager,
+		upgrader: newUpgrader(allowedOrigins),
 	}
 }
 
@@ -83,7 +85,7 @@ func (h *TerminalHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Upgrade to WebSocket
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("terminal websocket upgrade failed", "error", err)
 		return
