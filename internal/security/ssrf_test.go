@@ -103,9 +103,9 @@ func TestValidateIP(t *testing.T) {
 			if ip == nil {
 				t.Fatalf("invalid test IP: %s", tt.ip)
 			}
-			err := validateIP(ip)
+			err := ValidateIP(ip)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("validateIP(%s) error = %v, wantErr %v", tt.ip, err, tt.wantErr)
+				t.Errorf("ValidateIP(%s) error = %v, wantErr %v", tt.ip, err, tt.wantErr)
 			}
 		})
 	}
