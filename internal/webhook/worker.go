@@ -38,19 +38,19 @@ var retryDelays = []time.Duration{
 	30 * time.Minute,  // 5th retry
 }
 
-// RetryJob represents a webhook delivery retry job
+// RetryJob represents a webhook delivery retry job.
+// Note: Secret and URL are fetched from the database at retry time
+// instead of being stored in the message queue.
 type RetryJob struct {
-	WebhookID   string          `json:"webhook_id"`
-	WebhookURL  string          `json:"webhook_url"`
-	Secret      string          `json:"secret"`
-	EventID     string          `json:"event_id"`
-	OrgID       string          `json:"org_id"`
-	Topic       string          `json:"topic"`
-	Data        json.RawMessage `json:"data"`
-	Timestamp   time.Time       `json:"timestamp"`
-	Attempt     int             `json:"attempt"`
-	LastError   string          `json:"last_error"`
-	DeliveryID  string          `json:"delivery_id"`
+	WebhookID  string          `json:"webhook_id"`
+	EventID    string          `json:"event_id"`
+	OrgID      string          `json:"org_id"`
+	Topic      string          `json:"topic"`
+	Data       json.RawMessage `json:"data"`
+	Timestamp  time.Time       `json:"timestamp"`
+	Attempt    int             `json:"attempt"`
+	LastError  string          `json:"last_error"`
+	DeliveryID string          `json:"delivery_id"`
 }
 
 // Worker handles webhook deliveries.
@@ -206,10 +206,19 @@ func (w *Worker) processRetry(ctx context.Context, msg jetstream.Msg) {
 		return
 	}
 
-	// Build webhook struct for delivery
+	// Fetch webhook from database to get current URL and secret
+	webhookID := parseUUID(job.WebhookID)
+	dbWebhook, err := w.queries.GetWebhook(ctx, webhookID)
+	if err != nil {
+		slog.Warn("webhook: webhook not found for retry, skipping", "webhook_id", job.WebhookID)
+		msg.Ack()
+		return
+	}
+
 	wh := &db.Webhook{
-		Url:    job.WebhookURL,
-		Secret: job.Secret,
+		ID:     dbWebhook.ID,
+		Url:    dbWebhook.Url,
+		Secret: dbWebhook.Secret,
 	}
 
 	event := &domain.Event{
@@ -299,8 +308,6 @@ func (w *Worker) deliver(ctx context.Context, wh *db.Webhook, event *domain.Even
 func (w *Worker) scheduleRetry(ctx context.Context, wh *db.Webhook, event *domain.Event, attempt int, lastError, deliveryID string) {
 	job := &RetryJob{
 		WebhookID:  pgUUIDToString(wh.ID),
-		WebhookURL: wh.Url,
-		Secret:     wh.Secret,
 		EventID:    event.ID,
 		OrgID:      event.OrgID,
 		Topic:      event.Topic,
