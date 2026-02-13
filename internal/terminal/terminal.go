@@ -122,14 +122,16 @@ func (m *Manager) CreateSession(userID, orgID, projectID, jwt string, cols, rows
 		Rows:      rows,
 	}
 
-	// Build CLI command
+	// Build CLI command with minimal environment (do not inherit server env)
 	cmd := exec.Command(m.cliBin, "shell")
-	cmd.Env = append(os.Environ(),
-		"NOTIF_JWT="+jwt,
-		"NOTIF_SERVER="+m.server,
-		"NOTIF_PROJECT_ID="+projectID,
+	cmd.Env = []string{
+		"NOTIF_JWT=" + jwt,
+		"NOTIF_SERVER=" + m.server,
+		"NOTIF_PROJECT_ID=" + projectID,
 		"TERM=xterm-256color",
-	)
+		"PATH=/usr/local/bin:/usr/bin:/bin",
+		"HOME=/tmp",
+	}
 
 	// Start with PTY
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{
