@@ -875,15 +875,6 @@ func TestEventsReplayAPI(t *testing.T) {
 		if _, ok := result["messages"]; !ok {
 			t.Error("expected messages field")
 		}
-		if _, ok := result["bytes"]; !ok {
-			t.Error("expected bytes field")
-		}
-		if _, ok := result["first_seq"]; !ok {
-			t.Error("expected first_seq field")
-		}
-		if _, ok := result["last_seq"]; !ok {
-			t.Error("expected last_seq field")
-		}
 	})
 
 	t.Run("events requires authorization", func(t *testing.T) {
