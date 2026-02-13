@@ -166,6 +166,9 @@ func validateTopic(topic string) error {
 	if strings.HasPrefix(topic, ".") || strings.HasSuffix(topic, ".") {
 		return &validationError{"topic cannot start or end with ."}
 	}
+	if strings.ContainsAny(topic, ">*") {
+		return &validationError{"topic cannot contain wildcard characters (> or *)"}
+	}
 	return nil
 }
 
