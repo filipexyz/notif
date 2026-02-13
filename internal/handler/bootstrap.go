@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
+	"sync"
 
 	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
@@ -16,6 +17,7 @@ import (
 type BootstrapHandler struct {
 	queries *db.Queries
 	cfg     *config.Config
+	mu      sync.Mutex
 }
 
 // NewBootstrapHandler creates a new BootstrapHandler.
@@ -35,6 +37,10 @@ type BootstrapResponse struct {
 // 1. AUTH_MODE=local (self-hosted mode)
 // 2. No API keys exist in the database yet
 func (h *BootstrapHandler) Bootstrap(w http.ResponseWriter, r *http.Request) {
+	// Serialize bootstrap attempts to prevent race conditions
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	// Only allow in self-hosted mode
 	if !h.cfg.IsSelfHosted() {
 		writeJSON(w, http.StatusForbidden, map[string]string{

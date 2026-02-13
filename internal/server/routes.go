@@ -45,10 +45,13 @@ func (s *Server) routes() http.Handler {
 	r.Get("/health", healthHandler.Health)
 	r.Get("/ready", healthHandler.Ready)
 
-	// Bootstrap endpoints for self-hosted setup (no auth required)
+	// Bootstrap endpoints for self-hosted setup (no auth, but rate limited)
 	bootstrapHandler := handler.NewBootstrapHandler(queries, s.cfg)
-	r.Get("/api/v1/bootstrap/status", bootstrapHandler.Status)
-	r.Post("/api/v1/bootstrap", bootstrapHandler.Bootstrap)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RateLimit(s.rateLimiter))
+		r.Get("/api/v1/bootstrap/status", bootstrapHandler.Status)
+		r.Post("/api/v1/bootstrap", bootstrapHandler.Bootstrap)
+	})
 
 	// ================================================================
 	// API v1 ROUTES
