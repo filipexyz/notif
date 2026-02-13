@@ -16,13 +16,23 @@ import (
 	ws "github.com/gorilla/websocket"
 )
 
-var upgrader = ws.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// TODO: Add proper origin validation in production
-		return true
-	},
+func newUpgrader(allowedOrigins []string) ws.Upgrader {
+	return ws.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true // Non-browser clients (CLI, SDK)
+			}
+			for _, allowed := range allowedOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+			return false
+		},
+	}
 }
 
 // SubscribeHandler handles WebSocket subscriptions.
@@ -32,6 +42,7 @@ type SubscribeHandler struct {
 	dlqPublisher *nats.DLQPublisher
 	queries      *db.Queries
 	cfg          *config.Config
+	upgrader     ws.Upgrader
 }
 
 // NewSubscribeHandler creates a new SubscribeHandler.
@@ -42,6 +53,7 @@ func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, 
 		dlqPublisher: dlqPublisher,
 		queries:      queries,
 		cfg:          cfg,
+		upgrader:     newUpgrader(cfg.CORSOrigins),
 	}
 }
 
@@ -54,7 +66,7 @@ func generateClientID() string {
 
 // Subscribe upgrades HTTP to WebSocket and handles subscriptions.
 func (h *SubscribeHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("websocket upgrade failed", "error", err)
 		return
