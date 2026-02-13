@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -41,8 +42,8 @@ func DefaultRateLimitConfig() RateLimitConfig {
 
 // rateLimiterEntry holds a limiter and its last access time
 type rateLimiterEntry struct {
-	limiter  *rate.Limiter
-	lastSeen time.Time
+	limiter      *rate.Limiter
+	lastSeenNano atomic.Int64
 }
 
 // RateLimiter manages per-key rate limiters
@@ -76,7 +77,8 @@ func (rl *RateLimiter) cleanup() {
 			now := time.Now()
 			rl.limiters.Range(func(key, value interface{}) bool {
 				entry := value.(*rateLimiterEntry)
-				if now.Sub(entry.lastSeen) > rl.config.MaxAge {
+				lastSeen := time.Unix(0, entry.lastSeenNano.Load())
+				if now.Sub(lastSeen) > rl.config.MaxAge {
 					rl.limiters.Delete(key)
 				}
 				return true
@@ -94,21 +96,21 @@ func (rl *RateLimiter) Stop() {
 
 // getLimiter returns or creates a limiter for the given key
 func (rl *RateLimiter) getLimiter(key string, ratePerSecond, burst int) *rate.Limiter {
-	now := time.Now()
+	now := time.Now().UnixNano()
 
 	if val, ok := rl.limiters.Load(key); ok {
 		entry := val.(*rateLimiterEntry)
-		entry.lastSeen = now
+		entry.lastSeenNano.Store(now)
 		return entry.limiter
 	}
 
 	limiter := rate.NewLimiter(rate.Limit(ratePerSecond), burst)
 	entry := &rateLimiterEntry{
-		limiter:  limiter,
-		lastSeen: now,
+		limiter: limiter,
 	}
-	rl.limiters.Store(key, entry)
-	return limiter
+	entry.lastSeenNano.Store(now)
+	actual, _ := rl.limiters.LoadOrStore(key, entry)
+	return actual.(*rateLimiterEntry).limiter
 }
 
 // Allow checks if a request is allowed for the given key and rate
