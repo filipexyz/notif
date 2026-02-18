@@ -44,6 +44,10 @@ type Config struct {
 	// CORS
 	CORSOrigins []string `env:"CORS_ORIGINS" envSeparator:"," envDefault:"http://localhost:3000,http://localhost:5173"`
 
+	// Interceptors & Federation (optional)
+	InterceptorsConfigPath string `env:"INTERCEPTORS_CONFIG" envDefault:""`
+	FederationConfigPath   string `env:"FEDERATION_CONFIG" envDefault:""`
+
 	// Terminal
 	CLIBinaryPath string `env:"CLI_BINARY_PATH" envDefault:"/app/notif"`
 }

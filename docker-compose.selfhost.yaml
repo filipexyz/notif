@@ -13,13 +13,14 @@ services:
   nats:
     image: nats:2.10-alpine
     command:
-      - "--jetstream"
-      - "--store_dir=/data"
-      - "--http_port=8222"
+      - "-c"
+      - "/etc/nats/nats-server.conf"
     ports:
       - "4222:4222"
+      - "7422:7422"  # Leafnode port (for external NATS connections)
     volumes:
       - nats_data:/data
+      - ./nats-server.conf:/etc/nats/nats-server.conf:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
       interval: 5s

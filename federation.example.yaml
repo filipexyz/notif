@@ -1,0 +1,16 @@
+bridges:
+  - name: prod-alerts
+    url: https://prod.notif.sh
+    api_key: "${PROD_NOTIF_API_KEY}"
+    direction: inbound
+    remote_topic: "alerts.critical.>"
+    local_subject: "events.org_default.default.prod.alerts.critical"
+    enabled: true
+
+  - name: share-metrics
+    direction: outbound
+    url: https://prod.notif.sh
+    api_key: "${PROD_NOTIF_API_KEY}"
+    remote_topic: "metrics.from-staging"
+    local_subject: "events.org_default.default.metrics.>"
+    enabled: true

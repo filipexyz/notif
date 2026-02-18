@@ -8,6 +8,8 @@ import (
 	"syscall"
 
 	"github.com/filipexyz/notif/internal/config"
+	"github.com/filipexyz/notif/internal/federation"
+	"github.com/filipexyz/notif/internal/interceptor"
 	"github.com/filipexyz/notif/internal/nats"
 	"github.com/filipexyz/notif/internal/server"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -57,6 +59,46 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Start interceptors (optional — hard fail if config path is set but invalid)
+	var interceptorMgr *interceptor.Manager
+	if cfg.InterceptorsConfigPath != "" {
+		icfg, err := interceptor.LoadConfig(cfg.InterceptorsConfigPath)
+		if err != nil {
+			slog.Error("failed to load interceptors config", "error", err)
+			os.Exit(1)
+		}
+		interceptorMgr, err = interceptor.NewManager(icfg, nc.JetStream(), nc.Stream(), slog.Default())
+		if err != nil {
+			slog.Error("failed to create interceptor manager", "error", err)
+			os.Exit(1)
+		}
+		if err := interceptorMgr.Start(ctx); err != nil {
+			slog.Error("failed to start interceptors", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("interceptors started", "config", cfg.InterceptorsConfigPath)
+	}
+
+	// Start federation (optional — hard fail if config path is set but invalid)
+	var fed *federation.Federation
+	if cfg.FederationConfigPath != "" {
+		fcfg, err := federation.LoadConfig(cfg.FederationConfigPath)
+		if err != nil {
+			slog.Error("failed to load federation config", "error", err)
+			os.Exit(1)
+		}
+		fed, err = federation.NewFederation(fcfg, nc.JetStream(), nats.StreamName, slog.Default())
+		if err != nil {
+			slog.Error("failed to create federation", "error", err)
+			os.Exit(1)
+		}
+		if err := fed.Start(ctx); err != nil {
+			slog.Error("failed to start federation", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("federation started", "config", cfg.FederationConfigPath)
+	}
+
 	// Create and start HTTP server
 	srv := server.New(cfg, db, nc)
 
@@ -71,12 +113,21 @@ func main() {
 	<-ctx.Done()
 	slog.Info("shutting down...")
 
-	// Graceful shutdown
+	// Graceful shutdown: HTTP first, then interceptors/federation, then NATS
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown error", "error", err)
+	}
+
+	// Stop interceptors and federation after HTTP is drained (they may still
+	// have in-flight messages to publish) but before NATS connection closes.
+	if interceptorMgr != nil {
+		interceptorMgr.Stop()
+	}
+	if fed != nil {
+		fed.Stop()
 	}
 
 	slog.Info("shutdown complete")
