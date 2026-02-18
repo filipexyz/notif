@@ -30,6 +30,10 @@ type Config struct {
 	OperatorSeed       string `env:"OPERATOR_SEED"`        // NATS operator NKey seed (required for multi-account)
 	SystemAccountSeed  string `env:"SYSTEM_ACCOUNT_SEED"`  // NATS system account NKey seed (required for multi-account)
 
+	// Embedded NATS server (optional — starts NATS in-process)
+	NatsEmbedded bool   `env:"NATS_EMBEDDED" envDefault:"false"`
+	NatsStoreDir string `env:"NATS_STORE_DIR" envDefault:"/data/nats"`
+
 	// MultiAccount enables NATS multi-account isolation.
 	// When false, uses legacy single-connection mode.
 	MultiAccount bool `env:"NATS_MULTI_ACCOUNT" envDefault:"false"`

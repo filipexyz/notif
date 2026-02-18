@@ -34,6 +34,44 @@ func main() {
 	// Setup logging
 	setupLogging(cfg)
 
+	// Start embedded NATS server (optional)
+	if cfg.NatsEmbedded {
+		embeddedCfg := intNats.EmbeddedConfig{
+			StoreDir: cfg.NatsStoreDir,
+		}
+		if cfg.MultiAccount {
+			operatorKP, err := accounts.OperatorKeyFromSeed(cfg.OperatorSeed)
+			if err != nil {
+				slog.Error("failed to parse OPERATOR_SEED for embedded NATS", "error", err)
+				os.Exit(1)
+			}
+			operatorPub, err := operatorKP.PublicKey()
+			if err != nil {
+				slog.Error("failed to get operator public key", "error", err)
+				os.Exit(1)
+			}
+			systemKP, err := accounts.AccountKeyFromSeed(cfg.SystemAccountSeed)
+			if err != nil {
+				slog.Error("failed to parse SYSTEM_ACCOUNT_SEED for embedded NATS", "error", err)
+				os.Exit(1)
+			}
+			systemPub, err := systemKP.PublicKey()
+			if err != nil {
+				slog.Error("failed to get system account public key", "error", err)
+				os.Exit(1)
+			}
+			embeddedCfg.OperatorPublicKey = operatorPub
+			embeddedCfg.SystemAccountPublicKey = systemPub
+		}
+		embedded, err := intNats.StartEmbedded(embeddedCfg)
+		if err != nil {
+			slog.Error("failed to start embedded NATS", "error", err)
+			os.Exit(1)
+		}
+		defer embedded.Shutdown()
+		cfg.NatsURL = embedded.ClientURL()
+	}
+
 	// Connect to Postgres
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
