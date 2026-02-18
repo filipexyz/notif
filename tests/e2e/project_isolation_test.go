@@ -29,8 +29,18 @@ const (
 func setupProjectIsolationTest(t *testing.T, env *TestEnv) {
 	ctx := context.Background()
 
-	// Create Project A
+	// Create isolation test org (required for FK constraints)
 	_, err := env.DB.Exec(ctx, `
+		INSERT INTO orgs (id, name, nats_public_key, billing_tier)
+		VALUES ($1, $2, $3, 'free')
+		ON CONFLICT (id) DO NOTHING
+	`, IsolationTestOrg, IsolationTestOrg, "test_key_"+IsolationTestOrg)
+	if err != nil {
+		t.Fatalf("failed to create isolation test org: %v", err)
+	}
+
+	// Create Project A
+	_, err = env.DB.Exec(ctx, `
 		INSERT INTO projects (id, org_id, name, slug, created_at, updated_at)
 		VALUES ($1, $2, 'Project A', 'project-a', NOW(), NOW())
 		ON CONFLICT (org_id, slug) DO NOTHING
