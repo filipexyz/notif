@@ -1,6 +1,9 @@
 package client
 
 import (
+	"bytes"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -79,4 +82,58 @@ func (c *Client) setAuthHeaders(req *http.Request) {
 	if c.projectID != "" {
 		req.Header.Set("X-Project-ID", c.projectID)
 	}
+}
+
+// Get performs a GET request and returns the response body.
+func (c *Client) Get(path string) ([]byte, error) {
+	return c.doRequest("GET", path, nil)
+}
+
+// Post performs a POST request with a JSON body and returns the response body.
+func (c *Client) Post(path string, body []byte) ([]byte, error) {
+	return c.doRequest("POST", path, body)
+}
+
+// Put performs a PUT request with a JSON body and returns the response body.
+func (c *Client) Put(path string, body []byte) ([]byte, error) {
+	return c.doRequest("PUT", path, body)
+}
+
+// Delete performs a DELETE request and returns the response body.
+func (c *Client) Delete(path string) ([]byte, error) {
+	return c.doRequest("DELETE", path, nil)
+}
+
+func (c *Client) doRequest(method, path string, body []byte) ([]byte, error) {
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+
+	req, err := http.NewRequest(method, c.server+path, bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	c.setAuthHeaders(req)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		return data, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(data))
+	}
+
+	return data, nil
 }

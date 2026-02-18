@@ -26,7 +26,13 @@ type Config struct {
 	DatabaseURL string `env:"DATABASE_URL,required"`
 
 	// NATS
-	NatsURL string `env:"NATS_URL" envDefault:"nats://localhost:4222"`
+	NatsURL            string `env:"NATS_URL" envDefault:"nats://localhost:4222"`
+	OperatorSeed       string `env:"OPERATOR_SEED"`        // NATS operator NKey seed (required for multi-account)
+	SystemAccountSeed  string `env:"SYSTEM_ACCOUNT_SEED"`  // NATS system account NKey seed (required for multi-account)
+
+	// MultiAccount enables NATS multi-account isolation.
+	// When false, uses legacy single-connection mode.
+	MultiAccount bool `env:"NATS_MULTI_ACCOUNT" envDefault:"false"`
 
 	// Logging
 	LogLevel  string `env:"LOG_LEVEL" envDefault:"info"`
