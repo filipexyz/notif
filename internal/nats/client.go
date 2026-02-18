@@ -120,6 +120,12 @@ func (c *Client) Close() {
 	c.conn.Drain()
 }
 
+// Conn returns the underlying NATS connection.
+// Used by interceptors and federation clients that need raw pub/sub.
+func (c *Client) Conn() *nats.Conn {
+	return c.conn
+}
+
 // IsConnected returns true if connected to NATS.
 func (c *Client) IsConnected() bool {
 	return c.conn.IsConnected()

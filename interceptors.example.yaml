@@ -1,0 +1,23 @@
+# Interceptor configuration
+# Set INTERCEPTORS_CONFIG=./interceptors.yaml to enable
+
+interceptors:
+  # Reshape inbound messages from Omni
+  - name: omni-reshape
+    from: "events.org_default.default.omni.inbound.>"
+    to: "events.org_default.default.omni.ready.>"
+    jq: |
+      {
+        text: .textContent,
+        sender: .senderDisplayName,
+        chatId: .externalId,
+        channel: .channelType,
+        messageId: .id
+      }
+    enabled: true
+
+  # Filter system messages
+  # - name: drop-system
+  #   from: "events.org_default.default.raw.>"
+  #   to: "events.org_default.default.filtered.>"
+  #   jq: 'select(.messageType != "system")'
