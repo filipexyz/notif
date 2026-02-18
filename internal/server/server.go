@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2"
+	"github.com/filipexyz/notif/internal/audit"
 	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/middleware"
@@ -28,6 +29,7 @@ type Server struct {
 	terminalManager  *terminal.Manager
 	schedulerWorker  *scheduler.Worker
 	rateLimiter      *middleware.RateLimiter
+	auditLog         *audit.Logger
 	server           *http.Server
 	webhookCancel    context.CancelFunc
 	schedulerCancel  context.CancelFunc
@@ -67,6 +69,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
 	// Initialize rate limiter
 	rateLimiter := middleware.NewRateLimiter(middleware.DefaultRateLimitConfig())
 
+	// Initialize audit logger
+	auditLog := audit.New(queries, 256)
+
 	s := &Server{
 		cfg:              cfg,
 		db:               pool,
@@ -75,6 +80,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, nc *nats.Client) *Server {
 		terminalManager:  termMgr,
 		schedulerWorker:  schedWorker,
 		rateLimiter:      rateLimiter,
+		auditLog:         auditLog,
 	}
 
 	s.server = &http.Server{
@@ -134,5 +140,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.rateLimiter != nil {
 		s.rateLimiter.Stop()
 	}
-	return s.server.Shutdown(ctx)
+	// Shutdown HTTP server first (drains inflight requests),
+	// then close audit logger (safe: no more Log() calls after server stops).
+	err := s.server.Shutdown(ctx)
+	if s.auditLog != nil {
+		s.auditLog.Close()
+	}
+	return err
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/filipexyz/notif/internal/audit"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/middleware"
 	"github.com/filipexyz/notif/internal/security"
@@ -16,12 +17,13 @@ import (
 
 // WebhookHandler handles webhook CRUD operations.
 type WebhookHandler struct {
-	queries *db.Queries
+	queries  *db.Queries
+	auditLog *audit.Logger
 }
 
 // NewWebhookHandler creates a new WebhookHandler.
-func NewWebhookHandler(queries *db.Queries) *WebhookHandler {
-	return &WebhookHandler{queries: queries}
+func NewWebhookHandler(queries *db.Queries, auditLog *audit.Logger) *WebhookHandler {
+	return &WebhookHandler{queries: queries, auditLog: auditLog}
 }
 
 // CreateWebhookRequest is the request body for creating a webhook.
@@ -84,8 +86,20 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	webhookID := uuid.UUID(webhook.ID.Bytes).String()
+
+	// Audit log
+	if h.auditLog != nil {
+		actor := auditActor(authCtx)
+		ctx := audit.WithIP(r.Context(), audit.IPFromRequest(r))
+		h.auditLog.Log(ctx, actor, "webhook.create", authCtx.OrgID, webhookID, map[string]any{
+			"url":    req.URL,
+			"topics": req.Topics,
+		})
+	}
+
 	writeJSON(w, http.StatusCreated, WebhookResponse{
-		ID:        uuid.UUID(webhook.ID.Bytes).String(),
+		ID:        webhookID,
 		URL:       webhook.Url,
 		Topics:    webhook.Topics,
 		Secret:    webhook.Secret, // Return secret only on create
@@ -259,6 +273,13 @@ func (h *WebhookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Audit log
+	if h.auditLog != nil {
+		actor := auditActor(authCtx)
+		ctx := audit.WithIP(r.Context(), audit.IPFromRequest(r))
+		h.auditLog.Log(ctx, actor, "webhook.delete", authCtx.OrgID, idStr, nil)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
@@ -329,4 +350,18 @@ func generateSecret() string {
 	b := make([]byte, 32)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// auditActor returns a human-readable actor string from the auth context.
+func auditActor(authCtx *middleware.AuthContext) string {
+	if authCtx == nil {
+		return "unknown"
+	}
+	if authCtx.APIKeyID != nil {
+		return "api:" + authCtx.APIKeyID.String()
+	}
+	if authCtx.UserID != nil {
+		return "user:" + *authCtx.UserID
+	}
+	return "unknown"
 }

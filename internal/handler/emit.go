@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/filipexyz/notif/internal/audit"
 	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/domain"
@@ -22,15 +23,17 @@ type EmitHandler struct {
 	queries        *db.Queries
 	schemaRegistry *schema.Registry
 	cfg            *config.Config
+	auditLog       *audit.Logger
 }
 
 // NewEmitHandler creates a new EmitHandler.
-func NewEmitHandler(publisher *nats.Publisher, queries *db.Queries, schemaRegistry *schema.Registry, cfg *config.Config) *EmitHandler {
+func NewEmitHandler(publisher *nats.Publisher, queries *db.Queries, schemaRegistry *schema.Registry, cfg *config.Config, auditLog *audit.Logger) *EmitHandler {
 	return &EmitHandler{
 		publisher:      publisher,
 		queries:        queries,
 		schemaRegistry: schemaRegistry,
 		cfg:            cfg,
+		auditLog:       auditLog,
 	}
 }
 
@@ -145,6 +148,20 @@ func (h *EmitHandler) Emit(w http.ResponseWriter, r *http.Request) {
 		"topic", event.Topic,
 		"size", len(req.Data),
 	)
+
+	// Audit log
+	if h.auditLog != nil {
+		actor := auditActor(authCtx)
+		orgID := ""
+		if authCtx != nil {
+			orgID = authCtx.OrgID
+		}
+		ctx := audit.WithIP(r.Context(), audit.IPFromRequest(r))
+		h.auditLog.Log(ctx, actor, "event.emit", orgID, event.Topic, map[string]any{
+			"event_id": event.ID,
+			"size":     len(req.Data),
+		})
+	}
 
 	writeJSON(w, http.StatusOK, domain.EmitResponse{
 		ID:        event.ID,

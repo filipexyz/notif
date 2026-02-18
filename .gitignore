@@ -10,6 +10,9 @@ bin/
 .vscode/
 *.swp
 
+# Claude Code local settings
+.claude/settings.json
+
 # OS
 .DS_Store
 
@@ -39,3 +42,6 @@ target/
 
 # Test files
 test-hook.txt
+
+# Genie (AI brainstorm/wish artifacts)
+.genie/

@@ -5,6 +5,8 @@
 package db
 
 import (
+	"net/netip"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -19,6 +21,17 @@ type ApiKey struct {
 	RevokedAt          pgtype.Timestamptz `json:"revoked_at"`
 	OrgID              pgtype.Text        `json:"org_id"`
 	ProjectID          string             `json:"project_id"`
+}
+
+type AuditLog struct {
+	ID        int64              `json:"id"`
+	Timestamp pgtype.Timestamptz `json:"timestamp"`
+	Actor     string             `json:"actor"`
+	Action    string             `json:"action"`
+	OrgID     pgtype.Text        `json:"org_id"`
+	Target    pgtype.Text        `json:"target"`
+	Detail    []byte             `json:"detail"`
+	IpAddress *netip.Addr        `json:"ip_address"`
 }
 
 type ConsumerGroup struct {
