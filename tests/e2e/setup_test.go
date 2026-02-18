@@ -253,8 +253,18 @@ const (
 )
 
 func seedTestAPIKey(ctx context.Context, db *pgxpool.Pool) error {
-	// Create default project for test org
+	// Create test org (required for FK constraints)
 	_, err := db.Exec(ctx, `
+		INSERT INTO orgs (id, name, nats_public_key, billing_tier)
+		VALUES ($1, $2, $3, 'free')
+		ON CONFLICT (id) DO NOTHING
+	`, TestOrgID, TestOrgID, "test_key_"+TestOrgID)
+	if err != nil {
+		return fmt.Errorf("failed to create test org: %w", err)
+	}
+
+	// Create default project for test org
+	_, err = db.Exec(ctx, `
 		INSERT INTO projects (id, org_id, name, slug, created_at, updated_at)
 		VALUES ($1, $2, 'Default', 'default', NOW(), NOW())
 		ON CONFLICT (org_id, slug) DO NOTHING

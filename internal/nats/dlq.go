@@ -74,6 +74,16 @@ func NewDLQReader(js jetstream.JetStream) (*DLQReader, error) {
 	return &DLQReader{js: js, stream: stream}, nil
 }
 
+// NewDLQReaderForOrg creates a DLQReader for an org-specific DLQ stream.
+func NewDLQReaderForOrg(js jetstream.JetStream, orgID string) (*DLQReader, error) {
+	streamName := DLQStreamName + "_" + orgID
+	stream, err := js.Stream(context.Background(), streamName)
+	if err != nil {
+		return nil, fmt.Errorf("get DLQ stream for org %s: %w", orgID, err)
+	}
+	return &DLQReader{js: js, stream: stream}, nil
+}
+
 // DLQEntry represents a DLQ message with its sequence number.
 type DLQEntry struct {
 	Seq     uint64      `json:"seq"`

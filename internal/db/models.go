@@ -52,6 +52,17 @@ type Event struct {
 	ProjectID   pgtype.Text        `json:"project_id"`
 }
 
+type Org struct {
+	ID              string             `json:"id"`
+	Name            string             `json:"name"`
+	ExternalID      pgtype.Text        `json:"external_id"`
+	NatsPublicKey   string             `json:"nats_public_key"`
+	NatsAccountSeed pgtype.Text        `json:"nats_account_seed"`
+	BillingTier     pgtype.Text        `json:"billing_tier"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
 type EventDelivery struct {
 	ID           pgtype.UUID        `json:"id"`
 	EventID      string             `json:"event_id"`
