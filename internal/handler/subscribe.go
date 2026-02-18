@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/filipexyz/notif/internal/audit"
 	"github.com/filipexyz/notif/internal/config"
 	"github.com/filipexyz/notif/internal/db"
 	"github.com/filipexyz/notif/internal/middleware"
@@ -43,10 +44,11 @@ type SubscribeHandler struct {
 	queries      *db.Queries
 	cfg          *config.Config
 	upgrader     ws.Upgrader
+	auditLog     *audit.Logger
 }
 
 // NewSubscribeHandler creates a new SubscribeHandler.
-func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, dlqPublisher *nats.DLQPublisher, queries *db.Queries, cfg *config.Config) *SubscribeHandler {
+func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, dlqPublisher *nats.DLQPublisher, queries *db.Queries, cfg *config.Config, auditLog *audit.Logger) *SubscribeHandler {
 	return &SubscribeHandler{
 		hub:          hub,
 		consumerMgr:  consumerMgr,
@@ -54,6 +56,7 @@ func NewSubscribeHandler(hub *websocket.Hub, consumerMgr *nats.ConsumerManager, 
 		queries:      queries,
 		cfg:          cfg,
 		upgrader:     newUpgrader(cfg.CORSOrigins),
+		auditLog:     auditLog,
 	}
 }
 
@@ -92,6 +95,13 @@ func (h *SubscribeHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	h.hub.Register(client)
 
 	slog.Info("websocket client connected", "client_id", clientID)
+
+	// Audit log
+	if h.auditLog != nil {
+		actor := auditActor(authCtx)
+		ctx := audit.WithIP(r.Context(), audit.IPFromRequest(r))
+		h.auditLog.Log(ctx, actor, "subscription.create", orgID, clientID, nil)
+	}
 
 	// Start read/write pumps with a fresh context (not the HTTP request context)
 	go client.WritePump()

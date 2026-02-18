@@ -1,0 +1,21 @@
+{
+  "display": {
+    "topics": {
+      "whatsapp.*.inbound": {
+        "template": "{{if .data.isGroup}}[{{.data.groupName | color \"cyan\"}}] {{end}}{{.data.senderName | color \"green\" | bold}}: {{.data.text}}{{if .data.media}} [{{.data.media.type | color \"yellow\"}}]{{end}}{{if .data.transcription}} {{.data.transcription | color \"gray\"}}{{end}}"
+      },
+      "ravi.*.prompt": {
+        "template": "{{\"PROMPT\" | color \"magenta\" | bold}} {{.data.context.senderName | color \"green\"}}: {{.data.prompt | truncate 100}}"
+      },
+      "ravi.*.claude": {
+        "template": "{{if eq .data.subtype \"init\"}}{{\"INIT\" | color \"blue\"}} model={{.data.model}}{{else if eq .data.subtype \"success\"}}{{\"OK\" | color \"green\" | bold}} ${{.data.total_cost_usd | printf \"%.4f\"}} {{.data.duration_ms}}ms{{if .data.result}}{{if ne .data.result \"@@SILENT@@\"}} → {{.data.result | truncate 60}}{{else}} (silent){{end}}{{end}}{{else if eq .data.subtype \"error_during_execution\"}}{{\"ERR\" | color \"red\" | bold}} {{.data.errors | first | truncate 50}}{{else if eq .data.type \"assistant\"}}{{\"RESP\" | color \"cyan\"}} {{.data.message.content | first}}{{else if eq .data.type \"silent\"}}{{\"SILENT\" | color \"gray\"}}{{else}}{{.data.type}}/{{.data.subtype}}{{end}}"
+      },
+      "ravi.*.response": {
+        "template": "{{\"SEND\" | color \"green\" | bold}} → {{.data.target.chatId | color \"cyan\"}}: {{.data.response | truncate 80}}"
+      },
+      "tts": {
+        "template": "{{\"🔊 TTS\" | color \"yellow\" | bold}}: {{.data.text}}"
+      }
+    }
+  }
+}

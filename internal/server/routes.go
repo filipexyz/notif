@@ -59,11 +59,11 @@ func (s *Server) routes() http.Handler {
 	// ================================================================
 	publisher := nats.NewPublisher(s.nats.JetStream())
 	schemaRegistry := schema.NewRegistry(queries)
-	emitHandler := handler.NewEmitHandler(publisher, queries, schemaRegistry, s.cfg)
+	emitHandler := handler.NewEmitHandler(publisher, queries, schemaRegistry, s.cfg, s.auditLog)
 
 	consumerMgr := nats.NewConsumerManager(s.nats.Stream())
 	dlqPublisher := nats.NewDLQPublisher(s.nats.JetStream())
-	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr, dlqPublisher, queries, s.cfg)
+	subscribeHandler := handler.NewSubscribeHandler(s.hub, consumerMgr, dlqPublisher, queries, s.cfg, s.auditLog)
 
 	dlqReader, _ := nats.NewDLQReader(s.nats.JetStream())
 	dlqHandler := handler.NewDLQHandler(dlqReader, publisher)
@@ -71,13 +71,14 @@ func (s *Server) routes() http.Handler {
 	eventReader := nats.NewEventReader(s.nats.Stream())
 	eventsHandler := handler.NewEventsHandler(eventReader, queries)
 
-	webhookHandler := handler.NewWebhookHandler(queries)
+	webhookHandler := handler.NewWebhookHandler(queries, s.auditLog)
 	apiKeyHandler := handler.NewAPIKeyHandler(queries)
 	statsHandler := handler.NewStatsHandler(queries, eventReader, dlqReader)
 	schedulesHandler := handler.NewSchedulesHandler(queries, s.schedulerWorker)
 	projectHandler := handler.NewProjectHandler(queries)
 
 	schemaHandler := handler.NewSchemaHandler(schemaRegistry)
+	auditHandler := handler.NewAuditHandler(queries)
 
 	// WebSocket endpoint at root (no /api/v1 prefix for WS)
 	r.Group(func(r chi.Router) {
@@ -140,6 +141,9 @@ func (s *Server) routes() http.Handler {
 		r.Get("/schemas/{name}/versions", schemaHandler.ListVersions)
 		r.Get("/schemas/{name}/versions/{version}", schemaHandler.GetVersion)
 		r.Post("/schemas/{name}/validate", schemaHandler.Validate)
+
+		// Audit log
+		r.Get("/audit", auditHandler.List)
 
 		// Stats (observability)
 		r.Get("/stats/overview", statsHandler.Overview)
